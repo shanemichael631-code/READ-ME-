@@ -73,6 +73,11 @@
   function initials(name) {
     return name.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join("").toUpperCase();
   }
+  // "Demo Plumbing Co." -> "PL", "Demo Air HVAC" -> "AH", "Demo Pest Control" -> "PC"
+  function monogram(name) {
+    var words = name.replace(/^Demo\s+/i, "").replace(/\s+(Co\.?|Inc\.?|LLC)$/i, "").split(/\s+/).filter(Boolean);
+    return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
+  }
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -629,7 +634,7 @@
     // 4. New-tech ramp plan
     techFlags(cur, team).forEach(function (f) {
       var mentor = cur.techs.slice().sort(byDesc(function (x) { return x.revenue; }))[0];
-      var yr = f.gap * 0.25 * 26; // a quarter of the gap, over the next 6 months
+      var yr = f.gap * 0.2 * 52; // close a fifth of the gap, sustained for a year
       out.push({
         key: "ramp",
         title: "Give " + f.tech.name + " a 90-day ramp plan",
@@ -643,7 +648,7 @@
         setup: "90 days",
         yearly: yr,
         oneTime: 0,
-        impactText: "Closing a quarter of the gap is worth about " + approx(yr) + " over the next 6 months.",
+        impactText: "Closing a fifth of the gap is worth about " + approx(yr) + "/yr.",
         open: "tech:" + f.tech.id,
       });
     });
@@ -879,14 +884,15 @@
 
   // Vertical bar chart. Last bar highlighted. Bars can open a detail view.
   function barChart(o) {
-    var W = 340, H = o.height || 170, padL = 6, padR = 6, padT = 24, padB = 24;
+    var W = 340, H = o.height || 160, padL = 6, padR = 6, padT = 18, padB = 24;
     var vals = o.values;
     var max = Math.max.apply(null, vals.concat([0]));
-    var top = o.top || niceTop(max);
+    var top = o.top || (max > 0 ? max * 1.12 : 1); // no y-axis, so just leave room for the value label
     var plotH = H - padT - padB;
     var slot = (W - padL - padR) / vals.length;
     var barW = Math.min(30, slot - 10);
     var y = function (v) { return padT + plotH - (top ? (v / top) * plotH : 0); };
+    var ya = o.avg !== undefined ? y(o.avg) : null;
     var hi = o.highlight === undefined ? vals.length - 1 : o.highlight;
     var bars = vals.map(function (v, i) {
       var x = padL + slot * i + (slot - barW) / 2;
@@ -902,30 +908,17 @@
         ' data-label="' + esc(label) + '" aria-label="' + esc(label) + '">' +
         '<rect class="hit" x="' + (padL + slot * i) + '" y="0" width="' + slot + '" height="' + H + '"></rect>' +
         (path ? '<path d="' + path + '"></path>' : "") +
-        (i === hi && o.showValue !== false ? '<text class="val" x="' + (x + barW / 2) + '" y="' + (yy - 7) + '" text-anchor="middle">' + esc(o.short ? o.short(v) : o.fmt(v)) + "</text>" : "") +
+        (i === hi && o.showValue !== false ? '<text class="val" x="' + (x + barW / 2) + '" y="' + ((ya !== null && Math.abs(yy - ya) < 14 ? Math.min(yy, ya) : yy) - 7) + '" text-anchor="middle">' + esc(o.short ? o.short(v) : o.fmt(v)) + "</text>" : "") +
         '<text class="xl" x="' + (x + barW / 2) + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(o.labels[i]) + "</text>" +
         "</g>"
       );
     }).join("");
-    var avgLine = "";
-    if (o.avg !== undefined) {
-      var ya = y(o.avg);
-      avgLine = '<line class="avg" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + ya + '" y2="' + ya + '"></line>' +
-        '<text class="avg-l" x="' + padL + '" y="' + (ya - 5) + '">' + esc(o.avgLabel) + "</text>";
-    }
-    return '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="group" aria-label="' + esc(o.title || "Chart") + '">' +
+    var avgLine = ya !== null ? '<line class="avg" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + ya + '" y2="' + ya + '"></line>' : "";
+    var legend = ya !== null ? '<p class="chart-legend"><span class="dash" aria-hidden="true"></span>' + esc(o.avgLabel) + "</p>" : "";
+    return legend + '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="group" aria-label="' + esc(o.title || "Chart") + '">' +
       '<line class="base" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + (padT + plotH) + '" y2="' + (padT + plotH) + '"></line>' +
       bars + avgLine + "</svg>";
   }
-  function niceTop(max) {
-    if (max <= 0) return 1;
-    if (max <= 1) return Math.ceil(max * 10) / 10; // percentages
-    var mag = Math.pow(10, Math.floor(Math.log10(max)));
-    var steps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
-    for (var i = 0; i < steps.length; i++) if (steps[i] * mag >= max * 1.08) return steps[i] * mag;
-    return 10 * mag;
-  }
-
   function sparkline(values, toneCls) {
     var W = 64, H = 22, p = 2;
     var max = Math.max.apply(null, values), min = Math.min.apply(null, values);
@@ -944,7 +937,7 @@
     return '<ul class="hbars">' + rows.map(function (r) {
       var inner =
         '<span class="hb-top"><span class="hb-label">' + esc(r.label) + (r.sub ? '<span class="hb-sub">' + esc(r.sub) + "</span>" : "") + '</span><span class="hb-val">' + esc(r.display) + "</span></span>" +
-        '<span class="hb-track"><i class="' + (r.tone || "") + '" style="width:' + Math.max(1.5, (r.value / max) * 100).toFixed(1) + '%"></i></span>';
+        '<span class="hb-track"><i class="' + (r.tone || "") + '" style="width:' + (r.value > 0 ? Math.max(1.5, (r.value / max) * 100) : 0).toFixed(1) + '%"></i></span>';
       return "<li>" + (r.open ? '<button type="button" class="hb-row is-link" data-open="' + r.open + '">' + inner + icon("chevron", "chev") + "</button>" : '<div class="hb-row">' + inner + "</div>") + "</li>";
     }).join("") + "</ul>" + (opts.note ? '<p class="note">' + esc(opts.note) + "</p>" : "");
   }
@@ -984,10 +977,10 @@
     var color = TRADE_COLORS[c.trade] || "var(--accent)";
     return (
       '<header class="report-head">' +
-      '<div class="co-row"><span class="co-avatar" style="--co:' + color + '">' + esc(initials(c.name.replace(/^Demo /, ""))) + "</span>" +
+      '<div class="co-row"><span class="co-avatar" style="--co:' + color + '">' + esc(monogram(c.name)) + "</span>" +
       '<div><p class="eyebrow">Monday Owner Report <span class="badge">DEMO</span></p>' +
       "<h1>" + esc(c.name) + "</h1>" +
-      '<p class="co-meta">' + esc(c.trade) + " · " + esc(c.serviceArea) + " · " + plural(c.techs.length, "tech") + "</p></div></div>" +
+      '<p class="co-meta"><span>' + esc(c.trade) + "</span> <span>· " + esc(c.serviceArea) + "</span> <span>· " + plural(c.techs.length, "tech") + "</span></p></div></div>" +
       '<div class="head-meta"><span class="pill-meta">' + icon("clock") + "Mon " + shortDate(m.cur.start) + " – Sun " + shortDate(m.cur.end) + ", " + d(m.cur.end).getUTCFullYear() + "</span>" +
       '<span class="pill-meta delivered"><span class="dot" aria-hidden="true"></span>Delivered Monday, ' + shortDate(m.asOf) + " · " + CONFIG.deliveryTime + "</span></div>" +
       "</header>"
@@ -1012,8 +1005,8 @@
       var sub = t.key === "newReviews" && m.cur.avgRating ? '<span class="tile-sub">★ ' + m.cur.avgRating.toFixed(1) + "</span>" : "";
       return (
         '<button type="button" class="tile is-link" data-open="metric:' + t.key + '" aria-label="' + esc(t.label + ": " + t.def.fmt(t.value) + ". Open details") + '">' +
-        '<span class="tile-top"><span class="tile-label">' + t.label + "</span>" + sparkline(t.series, "tone-" + t.avgTone) + "</span>" +
-        '<span class="tile-value">' + t.def.fmt(t.value) + sub + "</span>" +
+        '<span class="tile-label">' + t.label + "</span>" +
+        '<span class="tile-value"><span>' + t.def.fmt(t.value) + "</span>" + sub + sparkline(t.series, "tone-" + t.avgTone) + "</span>" +
         '<span class="tile-delta tone-' + t.tone + '">' + arrow(t.delta) + fmtDelta(t) + ' <span class="muted">vs last wk</span></span>' +
         '<span class="tile-avg tone-' + t.avgTone + '">' + fmtVsAvg(t) + "</span>" +
         "</button>"
@@ -1190,9 +1183,10 @@
   function metricChart(m, key, fmt, short) {
     var series = m.weeks.map(function (w) { return w[key]; });
     var avg = mean(series);
+    var avgFmt = (short || fmt) === String ? function (v) { return (Math.round(v * 10) / 10).toString(); } : (short || fmt);
     return barChart({
       title: key, values: series, labels: weekLabels(m), fmt: fmt, short: short || fmt,
-      avg: avg, avgLabel: "8-wk avg " + (short || fmt)(avg),
+      avg: avg, avgLabel: "8-wk avg " + avgFmt(avg),
       openFor: function (i) { return "week:" + i; },
       labelFor: function (i) { return "Week of " + shortDate(m.weeks[i].start) + ": " + fmt(series[i]); },
     });
@@ -1210,8 +1204,8 @@
       [{ label: "Customer" }, { label: opts.dateLabel || "Age" }, { label: "Amount", num: true }],
       list.map(function (q) {
         return { cells: [
-          "<b>" + esc(q.customer) + '</b><span class="cell-sub">' + esc(q.service) + (opts.showTech ? " · " + esc(opts.techName(q.techId)) : "") + "</span>",
-          opts.dateFn ? esc(opts.dateFn(q)) : esc(q.ageDays + " days") + (q.lastFollowUpDate ? '<span class="cell-sub ok">Followed up ' + esc(shortDate(q.lastFollowUpDate)) + "</span>" : '<span class="cell-sub bad">No follow-up</span>'),
+          "<b>" + esc(q.customer) + '</b><span class="cell-sub">' + esc(q.service) + (opts.showTech ? ' · <span class="nowrap">' + esc(opts.techName(q.techId)) + "</span>" : "") + "</span>",
+          opts.dateFn ? esc(opts.dateFn(q)) : '<span class="nowrap">' + esc(q.ageDays + " days") + "</span>" + (opts.hideFollow ? "" : q.lastFollowUpDate ? '<span class="cell-sub ok">Called ' + esc(shortDate(q.lastFollowUpDate)) + "</span>" : '<span class="cell-sub bad">No call yet</span>'),
           money(q.amount),
         ] };
       }),
@@ -1238,11 +1232,11 @@
     );
   }
 
-  function reviewList(m, list) {
+  function reviewList(m, list, selfId) {
     if (!list.length) return '<p class="empty">No reviews.</p>';
     return '<ul class="reviews">' + list.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) {
       return '<li class="review' + (r.rating <= 3 ? " review-low" : "") + '"><div class="rv-top">' + stars(r.rating) + '<span class="rv-date">' + esc(shortDate(r.date)) + "</span></div>" +
-        '<p class="rv-text">“' + esc(r.text) + '”</p><p class="rv-by">' + esc(r.customer) + ' · <button type="button" class="link is-link" data-open="tech:' + r.techId + '">' + esc(techName(m, r.techId)) + "</button></p></li>";
+        '<p class="rv-text">“' + esc(r.text) + '”</p><p class="rv-by">' + esc(r.customer) + " · " + (r.techId === selfId ? esc(techName(m, r.techId)) : '<button type="button" class="link is-link" data-open="tech:' + r.techId + '">' + esc(techName(m, r.techId)) + "</button>") + "</p></li>";
     }).join("") + "</ul>";
   }
 
@@ -1350,7 +1344,7 @@
       if (openQ.length) {
         body += '<h3 class="sub-h">Open quotes ' + esc(firstName(t.name)) + " wrote" + (staleQ.length ? ' · <span class="bad">' + staleQ.length + " need a call</span>" : "") + "</h3>" + quoteRows(openQ);
       }
-      body += '<h3 class="sub-h">Reviews that name ' + esc(firstName(t.name)) + "</h3>" + reviewList(m, allRv.slice(-4));
+      body += '<h3 class="sub-h">Reviews that name ' + esc(firstName(t.name)) + "</h3>" + reviewList(m, allRv.slice(-4), id);
       return { kicker: "Tech", title: t.name, html: body };
     },
 
@@ -1373,7 +1367,7 @@
     leak: function (m, kind) {
       var item = find(m.leaks.items, function (x) { return x.kind === kind; });
       var body = '<div class="sheet-hero"><span class="sh-v neg">' + money(item.amount) + '</span><span class="muted">' + esc(item.detail) + "</span></div>";
-      if (kind === "quotes") body += quoteRows(item.list, { showTech: true, techName: function (id) { return techName(m, id); } });
+      if (kind === "quotes") body += quoteRows(item.list, { showTech: true, hideFollow: true, techName: function (id) { return techName(m, id); } });
       if (kind === "unpaid") body += invoiceRows(item.list);
       if (kind === "callbacks") body += callbackRows(m, item.list);
       return { kicker: "Money Leak", title: item.title, html: body };
@@ -1390,7 +1384,7 @@
     pipeline: function (m, key) {
       var b = find(m.pipeline.buckets, function (x) { return x.key === key; });
       var body = '<div class="sheet-hero"><span class="sh-v">' + money(b.amount) + '</span><span class="muted">' + plural(b.count, "open quote") + " · " + esc(b.hint) + "</span></div>" +
-        (b.list.length ? quoteRows(b.list, { showTech: true, techName: function (id) { return techName(m, id); } }) : '<p class="empty">None right now.</p>');
+        (b.list.length ? quoteRows(b.list, { showTech: true, hideFollow: key !== "working", techName: function (id) { return techName(m, id); } }) : '<p class="empty">None right now.</p>');
       return { kicker: "Sales Pipeline", title: b.label, html: body };
     },
 
@@ -1400,7 +1394,7 @@
     },
 
     changes: function (m) {
-      var body = '<div class="sheet-hero"><span class="sh-v pos">' + approx(m.changes.yearlyTotal) + '</span><span class="muted">estimated yearly upside' + (m.changes.oneTimeTotal ? ", plus " + approx(m.changes.oneTimeTotal) + " sitting on the table now" : "") + "</span></div>" +
+      var body = '<div class="sheet-hero"><span class="sh-v pos">' + approx(m.changes.yearlyTotal + m.changes.oneTimeTotal) + '</span><span class="muted">' + approx(m.changes.yearlyTotal) + " a year" + (m.changes.oneTimeTotal ? " + " + approx(m.changes.oneTimeTotal) + " sitting on the table now" : "") + "</span></div>" +
         hbars(m.changes.items.map(function (x) {
           return { label: x.title, sub: "Effort: " + x.effort + " · " + x.setup, value: x.yearly + x.oneTime, display: x.yearly ? approx(x.yearly) + "/yr" : approx(x.oneTime), tone: "good", open: x.open };
         }));
@@ -1411,7 +1405,7 @@
   // ---- Sheet (native <dialog>) with a back stack ----------------------------
 
   var Sheet = {
-    el: null, stack: [], pushed: false, getModel: null,
+    el: null, stack: [], scrolls: [], pushed: false, awaitingPop: false, getModel: null,
     init: function (getModel) {
       this.getModel = getModel;
       var el = document.createElement("dialog");
@@ -1433,24 +1427,31 @@
       el.querySelector(".sheet-back").addEventListener("click", function () { self.back(); });
       el.addEventListener("cancel", function (e) { e.preventDefault(); self.close(); });
       el.addEventListener("click", function (e) { if (e.target === el) self.close(); });
-      root.addEventListener("popstate", function () { if (el.open) self.close(true); });
+      root.addEventListener("popstate", function () { self.onPop(); });
     },
     open: function (route) {
+      if (this.el.open && this.stack[this.stack.length - 1] === route) return; // already showing it
       var view = buildView(this.getModel(), route);
       if (!view) return;
+      var body = this.el.querySelector(".sheet-body");
+      if (this.el.open) this.scrolls[this.stack.length - 1] = body.scrollTop; // remember where we were
       this.stack.push(route);
       this.paint(view);
       if (!this.el.open) {
         if (this.el.showModal) this.el.showModal(); else this.el.setAttribute("open", "");
-        this.el.querySelector(".sheet-body").focus({ preventScroll: true });
+        body.scrollTop = 0;
+        body.focus({ preventScroll: true });
         document.documentElement.classList.add("sheet-open");
-        try { history.pushState({ sheet: true }, ""); this.pushed = true; } catch (e) { this.pushed = false; }
+        if (!this.awaitingPop) {
+          try { history.pushState({ sheet: true }, ""); this.pushed = true; } catch (e) { this.pushed = false; }
+        }
       }
     },
     back: function () {
       if (this.stack.length < 2) return this.close();
       this.stack.pop();
       this.paint(buildView(this.getModel(), this.stack[this.stack.length - 1]));
+      this.el.querySelector(".sheet-body").scrollTop = this.scrolls[this.stack.length - 1] || 0;
     },
     paint: function (view) {
       var el = this.el;
@@ -1465,9 +1466,22 @@
     close: function (fromPop) {
       if (!this.el.open) return;
       this.stack = [];
+      this.scrolls = [];
+      this.el.querySelector(".sheet-body").scrollTop = 0;
       if (this.el.close) this.el.close(); else this.el.removeAttribute("open");
       document.documentElement.classList.remove("sheet-open");
-      if (this.pushed && !fromPop) { this.pushed = false; history.back(); } else { this.pushed = false; }
+      if (this.pushed && !fromPop) { this.pushed = false; this.awaitingPop = true; history.back(); } else { this.pushed = false; }
+    },
+    // The popstate caused by our own history.back() must not close a sheet opened right after.
+    onPop: function () {
+      if (this.awaitingPop) {
+        this.awaitingPop = false;
+        if (this.el.open && !this.pushed) {
+          try { history.pushState({ sheet: true }, ""); this.pushed = true; } catch (e) { /* ignore */ }
+        }
+        return;
+      }
+      if (this.el.open) this.close(true);
     },
   };
 
@@ -1550,6 +1564,15 @@
     picker.addEventListener("change", function () {
       show(picker.value);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    root.addEventListener("hashchange", function () {
+      var id = location.hash.slice(1);
+      if (id && id !== picker.value && data.companies.some(function (c) { return c.id === id; })) {
+        Sheet.close(true);
+        picker.value = id;
+        show(id);
+        window.scrollTo(0, 0);
+      }
     });
     var printBtn = document.getElementById("print");
     if (printBtn) printBtn.addEventListener("click", function () { window.print(); });
