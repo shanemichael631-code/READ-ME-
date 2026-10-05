@@ -414,7 +414,7 @@ const header = `/*
 function pretty(v, indent) {
   const flat = JSON.stringify(v);
   if (v === null || typeof v !== "object" || flat.length + indent.length < 150) return flat;
-  const pad = indent + "  ";
+  const pad = indent + " ";
   if (Array.isArray(v)) return "[\n" + v.map((x) => pad + pretty(x, pad)).join(",\n") + "\n" + indent + "]";
   return "{\n" + Object.keys(v).map((k) => pad + k + ": " + pretty(v[k], pad)).join(",\n") + "\n" + indent + "}";
 }
