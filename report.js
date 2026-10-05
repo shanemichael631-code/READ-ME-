@@ -79,6 +79,7 @@
     var words = name.replace(/^Demo\s+/i, "").replace(/\s+(Co\.?|Inc\.?|LLC)$/i, "").split(/\s+/).filter(Boolean);
     return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
   }
+  function openAttr(route) { return ' data-open="' + esc(route) + '"'; }
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -218,7 +219,7 @@
       var v = cur[def.key], p = prev[def.key];
       var known = base.map(function (w) { return w[def.key]; }).filter(function (x) { return x !== null; });
       var avg4 = known.length ? mean(known) : null;
-      var delta = v === null || p === null ? null : def.points ? v - p : change(v, p);
+      var delta = v === null || p === null ? null : def.points ? v - p : p === 0 && v === 0 ? 0 : change(v, p);
       var vsAvg = v === null || avg4 === null ? null : def.points ? v - avg4 : change(v, avg4);
       return {
         key: def.key, label: def.label, def: def,
@@ -386,7 +387,7 @@
         amount: cur.callbacks * c.callbackCostEstimate,
         detail: plural(cur.callbacks, "redo visit") + " × ~" + money(c.callbackCostEstimate) + " each (labor, truck, parts). Nobody gets paid for these.",
         rows: byTech.slice(0, 3).map(function (t) { return [t.name, plural(t.callbacks, "callback"), money(t.callbacks * c.callbackCostEstimate)]; }),
-        more: byTech.length - 3,
+        more: byTech.length > 3 ? cur.callbackList.length - 3 : 0,
         list: cur.callbackList,
       });
     }
@@ -510,7 +511,7 @@
         kind: "callback-review",
         value: cur.callbacks * c.callbackCostEstimate,
         title: "Go over last week's " + cur.callbacks + " callbacks at the Monday huddle.",
-        detail: listNames(cur.callbackList.map(function (x) { return techName2(c, x.techId) + ": " + x.issue.toLowerCase(); })) + ". Five minutes, no blame: what would have prevented each one?",
+        detail: listNames(cur.callbackList.map(function (x) { return techNameIn(c, x.techId) + ": " + x.issue.toLowerCase(); })) + ". Five minutes, no blame: what would have prevented each one?",
         impact: "At about " + money(c.callbackCostEstimate) + " per redo visit, last week's callbacks cost " + money(cur.callbacks * c.callbackCostEstimate) + ".",
         open: "metric:callbacks",
       });
@@ -520,7 +521,7 @@
     return out.slice(0, 3);
   }
 
-  function techName2(c, id) { var t = find(c.techs, function (x) { return x.id === id; }); return t ? t.name : id; }
+  function techNameIn(c, id) { var t = find(c.techs, function (x) { return x.id === id; }); return t ? t.name : id; }
 
   function realAddOnGap(ag) {
     return ag.weekly > 0 && ag.best.jobs >= 15 && ag.best.addOnRate - ag.restRate >= 0.05;
@@ -859,7 +860,6 @@
 
   // Line icons (24×24, stroke = currentColor).
   var ICONS = {
-    summary: '<path d="M4 6h16M4 12h10M4 18h7"/>',
     scorecard: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
     leak: '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/>',
     trend: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L19 8"/>',
@@ -871,7 +871,6 @@
     chevron: '<path d="M9 6l6 6-6 6"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     back: '<path d="M15 6l-6 6 6 6"/>',
-    print: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/>',
     bolt: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
   };
@@ -897,12 +896,16 @@
 
   function arrow(delta) {
     if (delta === null || Math.abs(delta) < 0.005) return '<span class="arr" aria-hidden="true">&ndash;</span>';
-    return '<span class="arr" aria-hidden="true">' + (delta > 0 ? "&#9650;" : "&#9660;") + "</span>";
+    return '<span class="arr" aria-hidden="true">' + (delta > 0 ? "&#9650;" : "&#9660;") + '</span><span class="sr">' + (delta > 0 ? "up " : "down ") + "</span>";
   }
   function fmtDelta(t) {
-    if (t.delta === null) return "new";
+    if (t.delta === null) return t.prev === 0 && t.value > 0 ? "up from 0" : "–";
     if (t.def.points) return (t.delta >= 0 ? "+" : "−") + pts(t.delta);
     return pct(Math.abs(t.delta));
+  }
+  // Spoken good/bad cue, since the colour alone doesn't carry it.
+  function toneSr(tone) {
+    return tone === "good" ? '<span class="sr">, good</span>' : tone === "bad" ? '<span class="sr">, needs attention</span>' : "";
   }
   function fmtAvg(t) {
     if (t.avg4 === null) return "–";
@@ -918,7 +921,7 @@
 
   function stars(n) {
     var out = "";
-    for (var i = 1; i <= 5; i++) out += '<span class="' + (i <= n ? "on" : "off") + '">★</span>';
+    for (var i = 1; i <= 5; i++) out += i <= n ? '<span class="on">★</span>' : '<span class="off">☆</span>';
     return '<span class="stars" role="img" aria-label="' + n + ' out of 5 stars">' + out + "</span>";
   }
 
@@ -946,20 +949,25 @@
       var opener = o.openFor ? o.openFor(i) : null;
       return (
         '<g class="bar' + (i === hi ? " bar-hi" : "") + (opener ? " is-link" : "") + '"' +
-        (opener ? ' data-open="' + opener + '" role="button" tabindex="0"' : ' role="img"') +
+        (opener ? openAttr(opener) + ' role="button" tabindex="0"' : ' role="img"') +
         ' data-label="' + esc(label) + '" aria-label="' + esc(label) + '">' +
         '<rect class="hit" x="' + (padL + slot * i) + '" y="0" width="' + slot + '" height="' + H + '"></rect>' +
         (path ? '<path d="' + path + '"></path>' : "") +
-        (i === hi && o.showValue !== false ? '<text class="val" x="' + (x + barW / 2) + '" y="' + ((ya !== null && Math.abs(yy - ya) < 14 ? Math.min(yy, ya) : yy) - 7) + '" text-anchor="middle">' + esc(o.short ? o.short(v) : o.fmt(v)) + "</text>" : "") +
-        '<text class="xl" x="' + (x + barW / 2) + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(o.labels[i]) + "</text>" +
         "</g>"
       );
+    }).join("");
+    // Value and date labels sit outside the bar buttons (aria-hidden), so each bar's spoken name is its full label.
+    var texts = vals.map(function (v, i) {
+      var x = padL + slot * i + slot / 2;
+      var yy = padT + plotH - Math.max(v > 0 ? 2 : 0, top ? (v / top) * plotH : 0);
+      return (i === hi && o.showValue !== false ? '<text class="val" x="' + x + '" y="' + ((ya !== null && Math.abs(yy - ya) < 14 ? Math.min(yy, ya) : yy) - 7) + '" text-anchor="middle">' + esc(o.short ? o.short(v) : o.fmt(v)) + "</text>" : "") +
+        '<text class="xl' + (i === hi ? " xl-hi" : "") + '" x="' + x + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(o.labels[i]) + "</text>";
     }).join("");
     var avgLine = ya !== null ? '<line class="avg" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + ya + '" y2="' + ya + '"></line>' : "";
     var legend = ya !== null ? '<p class="chart-legend"><span class="dash" aria-hidden="true"></span>' + esc(o.avgLabel) + "</p>" : "";
     return legend + '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="group" aria-label="' + esc(o.title || "Chart") + '">' +
       '<line class="base" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + (padT + plotH) + '" y2="' + (padT + plotH) + '"></line>' +
-      bars + avgLine + "</svg>";
+      bars + avgLine + '<g class="labels" aria-hidden="true">' + texts + "</g></svg>";
   }
   function sparkline(values, toneCls) {
     var W = 64, H = 22, p = 2;
@@ -980,7 +988,7 @@
       var inner =
         '<span class="hb-top"><span class="hb-label">' + esc(r.label) + (r.sub ? '<span class="hb-sub">' + esc(r.sub) + "</span>" : "") + '</span><span class="hb-val">' + esc(r.display) + "</span></span>" +
         '<span class="hb-track"><i class="' + (r.tone || "") + '" style="width:' + (r.value > 0 ? Math.max(1.5, (r.value / max) * 100) : 0).toFixed(1) + '%"></i></span>';
-      return "<li>" + (r.open ? '<button type="button" class="hb-row is-link" data-open="' + r.open + '">' + inner + icon("chevron", "chev") + "</button>" : '<div class="hb-row">' + inner + "</div>") + "</li>";
+      return "<li>" + (r.open ? '<button type="button" class="hb-row is-link"' + openAttr(r.open) + ">" + inner + icon("chevron", "chev") + "</button>" : '<div class="hb-row">' + inner + "</div>") + "</li>";
     }).join("") + "</ul>" + (opts.note ? '<p class="note">' + esc(opts.note) + "</p>" : "");
   }
 
@@ -990,7 +998,9 @@
     return '<div class="tbl-wrap"><table class="tbl"><thead><tr>' + cols.map(function (c) {
       return "<th" + (c.num ? ' class="num"' : "") + ">" + esc(c.label) + "</th>";
     }).join("") + "</tr></thead><tbody>" + rows.map(function (r) {
-      return "<tr" + (r.open ? ' class="is-link" data-open="' + r.open + '" tabindex="0" role="button"' : "") + ">" + r.cells.map(function (cell, i) {
+      var bc = r.btnCell || 0; // the cell that holds the row's real button
+      return "<tr" + (r.open ? ' class="is-link"' + openAttr(r.open) : "") + ">" + r.cells.map(function (cell, i) {
+        if (r.open && i === bc) cell = '<button type="button" class="row-btn">' + cell + "</button>";
         return "<td" + (cols[i].num ? ' class="num"' : "") + ">" + cell + "</td>";
       }).join("") + "</tr>";
     }).join("") + "</tbody>" + (opts.foot ? "<tfoot><tr>" + opts.foot.map(function (cell, i) {
@@ -999,7 +1009,7 @@
   }
 
   function statGrid(items) {
-    return '<div class="stat-grid' + (items.length === 3 ? " three" : "") + '">' + items.map(function (s) {
+    return '<div class="stat-grid' + (items.length === 3 ? " three" : items.length === 4 ? " four" : "") + '">' + items.map(function (s) {
       return '<div class="stat"><span class="stat-l">' + esc(s.label) + '</span><span class="stat-v">' + esc(s.value) + "</span>" +
         (s.sub ? '<span class="stat-s ' + (s.tone ? "tone-" + s.tone : "") + '">' + esc(s.sub) + "</span>" : "") + "</div>";
     }).join("") + "</div>";
@@ -1024,7 +1034,7 @@
       "<h1>" + esc(c.name) + "</h1>" +
       '<p class="co-meta"><span>' + esc(c.trade) + "</span> <span>· " + esc(c.serviceArea) + "</span> <span>· " + plural(c.techs.length, "tech") + "</span></p></div></div>" +
       '<div class="head-meta"><span class="pill-meta">' + icon("clock") + "Mon " + shortDate(m.cur.start) + " – Sun " + shortDate(m.cur.end) + ", " + d(m.cur.end).getUTCFullYear() + "</span>" +
-      '<span class="pill-meta delivered"><span class="dot" aria-hidden="true"></span>Delivered Monday, ' + shortDate(m.asOf) + " · " + CONFIG.deliveryTime + "</span></div>" +
+      '<span class="pill-meta"><span class="dot" aria-hidden="true"></span>Delivered Monday, ' + shortDate(m.asOf) + " · " + CONFIG.deliveryTime + "</span></div>" +
       "</header>"
     );
   }
@@ -1035,9 +1045,9 @@
       '<h2 id="summary-h">' + icon("bolt") + "<span>The Short Version</span></h2>" +
       '<p class="summary">' + m.summary.map(esc).join(" ") + "</p>" +
       '<div class="hero-stats">' +
-      '<button type="button" class="hero-stat is-link" data-open="metric:revenue"><span>Revenue</span><b>' + money(m.cur.revenue) + "</b></button>" +
-      '<button type="button" class="hero-stat is-link" data-open="leaks"><span>Money at risk</span><b class="neg">' + money(m.leaks.total) + "</b></button>" +
-      '<button type="button" class="hero-stat is-link" data-open="changes"><span>Upside</span><b class="pos">' + approx(m.changes.yearlyTotal + m.changes.oneTimeTotal) + "</b></button>" +
+      '<button type="button" class="hero-stat is-link"' + openAttr("metric:revenue") + '><span>Revenue</span><b>' + money(m.cur.revenue) + "</b></button>" +
+      '<button type="button" class="hero-stat is-link"' + openAttr("leaks") + '><span>Money leaks</span><b class="neg">' + money(m.leaks.total) + "</b></button>" +
+      '<button type="button" class="hero-stat is-link"' + openAttr("changes") + '><span>Upside</span><b class="pos">' + approx(m.changes.yearlyTotal + m.changes.oneTimeTotal) + "</b></button>" +
       "</div></section>"
     );
   }
@@ -1046,11 +1056,11 @@
     var tiles = m.scorecard.map(function (t) {
       var sub = t.key === "newReviews" && m.cur.avgRating ? '<span class="tile-sub">★ ' + m.cur.avgRating.toFixed(1) + "</span>" : "";
       return (
-        '<button type="button" class="tile is-link" data-open="metric:' + t.key + '" aria-label="' + esc(t.label + ": " + t.def.fmt(t.value) + ". Open details") + '">' +
+        '<button type="button" class="tile is-link"' + openAttr("metric:" + t.key) + ">" +
         '<span class="tile-label">' + t.label + "</span>" +
         '<span class="tile-value"><span>' + t.def.fmt(t.value) + "</span>" + sub + sparkline(t.series, "tone-" + t.avgTone) + "</span>" +
-        '<span class="tile-delta tone-' + t.tone + '">' + arrow(t.delta) + fmtDelta(t) + ' <span class="muted">vs last wk</span></span>' +
-        '<span class="tile-avg tone-' + t.avgTone + '">' + fmtVsAvg(t) + "</span>" +
+        '<span class="tile-delta tone-' + t.tone + '">' + arrow(t.delta) + fmtDelta(t) + ' <span class="muted">vs last wk</span>' + toneSr(t.tone) + "</span>" +
+        '<span class="tile-avg tone-' + t.avgTone + '">' + fmtVsAvg(t) + toneSr(t.avgTone) + "</span>" +
         "</button>"
       );
     }).join("");
@@ -1066,7 +1076,7 @@
       }).join("");
       var opener = x.kind === "tech" ? "tech:" + x.flag.tech.id : "leak:" + x.kind;
       return (
-        '<button type="button" class="leak is-link" data-open="' + opener + '">' +
+        '<button type="button" class="leak is-link"' + openAttr(opener) + ">" +
         '<span class="leak-top"><span class="leak-title">' + esc(x.title) + '</span><span class="leak-amt">' + money(x.amount) + (x.kind === "tech" ? '<small>/wk</small>' : "") + "</span></span>" +
         '<span class="leak-detail">' + esc(x.detail) + "</span>" +
         '<span class="leak-rows">' + rows + "</span>" +
@@ -1075,7 +1085,7 @@
       );
     }).join("");
     return section("leaks", "Money Leaks", "leak",
-      '<div class="leak-total"><span class="big">' + money(L.total) + '</span><span class="label">at risk right now across ' + plural(L.items.length, "item") + "</span></div>" +
+      '<div class="leak-total"><span class="big">' + money(L.total) + '</span><span class="label">tied up or lost across ' + plural(L.items.length, "item") + "</span></div>" +
       '<div class="leak-list">' + items + "</div>");
   }
 
@@ -1092,7 +1102,7 @@
       openFor: function (i) { return "week:" + i; },
     });
     var trend = change(m.cur.revenue, weeks[0].revenue);
-    var caption = '<p class="chart-cap" aria-live="polite">' + esc("Week of " + shortDate(m.cur.start) + ": " + money(m.cur.revenue) + " · " + m.cur.jobs + " jobs") + "</p>";
+    var caption = '<p class="chart-cap">' + esc("Week of " + shortDate(m.cur.start) + ": " + money(m.cur.revenue) + " · " + m.cur.jobs + " jobs") + "</p>";
     var note = '<p class="chart-note">' + (Math.abs(trend) < 0.03 ? "Flat over 8 weeks (" + (trend >= 0 ? "+" : "−") + pct(Math.abs(trend)) + ")." : (trend > 0 ? "Up " : "Down ") + pct(Math.abs(trend)) + " since " + shortDate(weeks[0].start) + ".") + ' <span class="muted screen-only">Tap a bar to open that week.</span></p>';
     return section("trend", "Revenue Trend", "trend", caption + svg + note);
   }
@@ -1106,13 +1116,13 @@
     ];
     var fmax = Math.max(p.leads, p.sent, p.won) || 1;
     var f = '<div class="funnel">' + funnel.map(function (s, i) {
-      return '<button type="button" class="fn-step is-link" data-open="' + (i === 0 ? "metric:newLeads" : "metric:closeRate") + '">' +
+      return '<button type="button" class="fn-step is-link"' + openAttr(i === 0 ? "metric:newLeads" : "metric:closeRate") + ">" +
         '<span class="fn-bar"><i style="width:' + Math.max(4, (s.value / fmax) * 100).toFixed(1) + '%"></i></span>' +
         '<span class="fn-l">' + s.label + '</span><span class="fn-v">' + s.value + (s.sub ? '<small>' + s.sub + "</small>" : "") + "</span></button>";
     }).join("") + "</div>";
     var rateLine = '<p class="fn-rate">Close rate <b>' + rate(m.cur.closeRate) + "</b> · " + p.won + " won, " + p.sent + " new quotes sent last week</p>";
     var b = '<div class="buckets">' + p.buckets.map(function (bk) {
-      return '<button type="button" class="bucket is-link tone-' + bk.tone + '" data-open="pipeline:' + bk.key + '">' +
+      return '<button type="button" class="bucket is-link tone-' + bk.tone + '"' + openAttr("pipeline:" + bk.key) + ">" +
         '<span class="bk-l">' + bk.label + '</span><span class="bk-v">' + money(bk.amount) + '</span><span class="bk-s">' + plural(bk.count, "quote") + "</span></button>";
     }).join("") + "</div>";
     return section("sales", "Sales Pipeline", "sales",
@@ -1125,9 +1135,9 @@
     var rows = techs.map(function (t, i) {
       var flagged = isCallbackFlag(t, m.team);
       return (
-        '<button type="button" class="lb-row is-link' + (flagged ? " lb-flag" : "") + '" data-open="tech:' + t.id + '" aria-label="' + esc(t.name + ", " + money(t.revenue) + ". Open tech details") + '">' +
-        '<span class="lb-rank">' + (i + 1) + "</span>" +
-        '<span class="lb-name"><span class="lb-av">' + esc(initials(t.name)) + '</span><span><b>' + esc(t.name) + "</b>" + (flagged ? ' <span class="pill">Check in</span>' : "") + '<span class="lb-role">' + esc(t.role) + (t.jobs ? "" : " · no jobs last week") + "</span>" +
+        '<button type="button" class="lb-row is-link"' + openAttr("tech:" + t.id) + ">" +
+        '<span class="lb-rank"><span class="sr">Rank </span>' + (i + 1) + "</span>" +
+        '<span class="lb-name"><span class="lb-av" aria-hidden="true">' + esc(initials(t.name)) + '</span><span><b>' + esc(t.name) + "</b>" + (flagged ? ' <span class="pill">Check in</span>' : "") + '<span class="lb-role">' + esc(t.role) + (t.jobs ? "" : " · no jobs last week") + "</span>" +
         '<span class="lb-bar" aria-hidden="true"><i style="width:' + Math.round((t.revenue / maxRev) * 100) + '%"></i></span></span></span>' +
         '<span class="lb-num lb-rev" data-l="Revenue">' + money(t.revenue) + "</span>" +
         '<span class="lb-num" data-l="Jobs">' + t.jobs + "</span>" +
@@ -1156,7 +1166,7 @@
         '<label class="check"><input type="checkbox" data-done="' + esc(key) + '"' + (done ? " checked" : "") + '><span class="anum">' + (i + 1) + '</span><span class="sr">Mark done</span></label>' +
         '<div><p class="a-title">' + esc(a.title) + '</p><p class="a-detail">' + esc(a.detail) + "</p>" +
         '<div class="a-foot"><span class="a-impact">' + esc(a.impact) + "</span>" +
-        (a.open ? '<button type="button" class="a-link is-link" data-open="' + a.open + '">Details' + icon("chevron") + "</button>" : "") + "</div></div></li>";
+        (a.open ? '<button type="button" class="a-link is-link"' + openAttr(a.open) + ">Details" + icon("chevron") + "</button>" : "") + "</div></div></li>";
     }).join("");
     var n = m.actions.length;
     var title = n === 1 ? "Do This 1 Thing This Week" : n ? "Do These " + n + " Things This Week" : "This Week";
@@ -1166,7 +1176,7 @@
 
   function renderWins(m) {
     var items = m.wins.map(function (w) {
-      return '<li><button type="button" class="win is-link" data-open="' + w.open + '"><span class="win-ico" aria-hidden="true">' + w.icon + '</span><span><span class="w-title">' + esc(w.title) + '</span><span class="w-text">' + esc(w.text) + "</span></span></button></li>";
+      return '<li><button type="button" class="win is-link"' + openAttr(w.open) + '><span class="win-ico" aria-hidden="true">' + w.icon + '</span><span><span class="w-title">' + esc(w.title) + '</span><span class="w-text">' + esc(w.text) + "</span></span></button></li>";
     }).join("");
     return section("wins", "Wins", "wins", '<ul class="wins">' + items + "</ul>");
   }
@@ -1189,11 +1199,11 @@
         "</details>" +
         '<div class="ch-foot"><span class="ch-impact">' + esc(x.impactText) + "</span>" +
         '<span class="ch-tags"><span class="tag">Effort: ' + x.effort + '</span><span class="tag">Setup: ' + esc(x.setup) + "</span></span></div>" +
-        '<button type="button" class="a-link is-link" data-open="' + x.open + '">See the numbers' + icon("chevron") + "</button>" +
+        '<button type="button" class="a-link is-link"' + openAttr(x.open) + ">See the numbers" + icon("chevron") + "</button>" +
         "</article>";
     }).join("");
     return section("changes", "Changes Worth Making", "changes", head + '<div class="changes">' + cards + "</div>" +
-      '<p class="note">Estimates come straight from this report\'s numbers and are rounded. They assume you recover part of each gap, not all of it.</p>', { cls: "card-changes" });
+      '<p class="note">Estimates come straight from this report\'s numbers and are rounded. They assume you recover part of each gap, not all of it.</p>', {});
   }
 
   function renderFooter(m) {
@@ -1234,7 +1244,7 @@
     var avg = mean(raw.filter(function (v) { return v !== null; }));
     var avgFmt = (short || fmt) === String ? function (v) { return (Math.round(v * 10) / 10).toString(); } : (short || fmt);
     return barChart({
-      title: key, values: series, labels: weekLabels(m), fmt: fmt, short: short || fmt,
+      title: (scoreTile(m, key) ? scoreTile(m, key).label : key) + ", last 8 weeks", values: series, labels: weekLabels(m), fmt: fmt, short: short || fmt,
       avg: avg, avgLabel: "8-wk avg " + avgFmt(avg),
       openFor: function (i) { return "week:" + i; },
       labelFor: function (i) { return "Week of " + shortDate(m.weeks[i].start) + ": " + (raw[i] === null ? "–" : fmt(raw[i])); },
@@ -1277,7 +1287,7 @@
     return table(
       [{ label: "Customer" }, { label: "Tech" }, { label: "Day" }],
       list.map(function (x) {
-        return { cells: ["<b>" + esc(x.customer) + '</b><span class="cell-sub">' + esc(x.issue) + (x.recurringPlanValue ? " · plan " + money(x.recurringPlanValue) + "/yr" : "") + "</span>", esc(techName(m, x.techId)), esc(weekday(x.date) + " " + shortDate(x.date))], open: "tech:" + x.techId };
+        return { cells: ["<b>" + esc(x.customer) + '</b><span class="cell-sub">' + esc(x.issue) + (x.recurringPlanValue ? " · plan " + money(x.recurringPlanValue) + "/yr" : "") + "</span>", esc(techName(m, x.techId)), esc(weekday(x.date) + " " + shortDate(x.date))], open: "tech:" + x.techId, btnCell: 1 };
       })
     );
   }
@@ -1286,19 +1296,19 @@
     if (!list.length) return '<p class="empty">No reviews.</p>';
     return '<ul class="reviews">' + list.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) {
       return '<li class="review' + (r.rating <= 3 ? " review-low" : "") + '"><div class="rv-top">' + stars(r.rating) + '<span class="rv-date">' + esc(shortDate(r.date)) + "</span></div>" +
-        '<p class="rv-text">“' + esc(r.text) + '”</p><p class="rv-by">' + esc(r.customer) + " · " + (r.techId === selfId ? esc(techName(m, r.techId)) : '<button type="button" class="link is-link" data-open="tech:' + r.techId + '">' + esc(techName(m, r.techId)) + "</button>") + "</p></li>";
+        '<p class="rv-text">“' + esc(r.text) + '”</p><p class="rv-by">' + esc(r.customer) + " · " + (r.techId === selfId ? esc(techName(m, r.techId)) : '<button type="button" class="link is-link"' + openAttr("tech:" + r.techId) + ">" + esc(techName(m, r.techId)) + "</button>") + "</p></li>";
     }).join("") + "</ul>";
   }
 
-  function techName(m, id) { var t = find(m.company.techs, function (x) { return x.id === id; }); return t ? t.name : id; }
+  function techName(m, id) { return techNameIn(m.company, id); }
 
   function scoreTile(m, key) { return find(m.scorecard, function (x) { return x.key === key; }); }
 
   function metricHeader(m, key) {
     var t = scoreTile(m, key);
     return '<div class="sheet-hero"><span class="sh-v">' + t.def.fmt(t.value) + "</span>" +
-      '<span class="tile-delta tone-' + t.tone + '">' + arrow(t.delta) + fmtDelta(t) + ' <span class="muted">vs last wk</span></span>' +
-      '<span class="tile-avg tone-' + t.avgTone + '">' + fmtVsAvg(t) + "</span></div>";
+      '<span class="tile-delta tone-' + t.tone + '">' + arrow(t.delta) + fmtDelta(t) + ' <span class="muted">vs last wk</span>' + toneSr(t.tone) + "</span>" +
+      '<span class="tile-avg tone-' + t.avgTone + '">' + fmtVsAvg(t) + toneSr(t.avgTone) + "</span></div>";
   }
 
   var VIEWS = {
@@ -1425,9 +1435,9 @@
     },
 
     leaks: function (m) {
-      var body = '<div class="sheet-hero"><span class="sh-v neg">' + money(m.leaks.total) + '</span><span class="muted">at risk right now</span></div>' +
+      var body = '<div class="sheet-hero"><span class="sh-v neg">' + money(m.leaks.total) + '</span><span class="muted">tied up or lost across ' + plural(m.leaks.items.length, "item") + "</span></div>" +
         hbars(m.leaks.items.map(function (x) {
-          return { label: x.title, sub: x.detail, value: x.amount, display: money(x.amount), tone: "bad", open: x.kind === "tech" ? "tech:" + x.flag.tech.id : "leak:" + x.kind };
+          return { label: x.title, sub: x.detail, value: x.amount, display: money(x.amount) + (x.kind === "tech" ? "/wk" : ""), tone: "bad", open: x.kind === "tech" ? "tech:" + x.flag.tech.id : "leak:" + x.kind };
         }));
       return { kicker: "Money Leaks", title: "Where the money is going", html: body };
     },
@@ -1457,7 +1467,7 @@
   // ---- Sheet (native <dialog>) with a back stack ----------------------------
 
   var Sheet = {
-    el: null, stack: [], scrolls: [], pushed: false, awaitingPop: false, getModel: null,
+    el: null, stack: [], scrolls: [], pushed: false, awaitingPop: false, getModel: null, navAt: 0,
     init: function (getModel) {
       this.getModel = getModel;
       var el = document.createElement("dialog");
@@ -1471,14 +1481,14 @@
         '<div class="sheet-titles"><p class="sheet-kicker"></p><h2 id="sheet-title"></h2></div>' +
         '<button type="button" class="icon-btn sheet-close" aria-label="Close">' + icon("close") + "</button>" +
         "</header>" +
-        '<div class="sheet-body" tabindex="-1"></div></div>';
+        '<div class="sheet-body" tabindex="0"></div></div>';
       document.body.appendChild(el);
       this.el = el;
       var self = this;
       el.querySelector(".sheet-close").addEventListener("click", function () { self.close(); });
       el.querySelector(".sheet-back").addEventListener("click", function () { self.back(); });
       el.addEventListener("cancel", function (e) { e.preventDefault(); self.close(); });
-      el.addEventListener("click", function (e) { if (e.target === el) self.close(); });
+      el.addEventListener("click", function (e) { if (e.target === el && !self.justNavigated(e)) self.close(); });
       root.addEventListener("popstate", function () { self.onPop(); });
     },
     open: function (route) {
@@ -1488,6 +1498,7 @@
       var body = this.el.querySelector(".sheet-body");
       if (this.el.open) this.scrolls[this.stack.length - 1] = body.scrollTop; // remember where we were
       this.stack.push(route);
+      this.navAt = performance.now();
       this.paint(view);
       if (!this.el.open) {
         if (this.el.showModal) this.el.showModal(); else this.el.setAttribute("open", "");
@@ -1502,6 +1513,7 @@
     back: function () {
       if (this.stack.length < 2) return this.close();
       this.stack.pop();
+      this.navAt = performance.now();
       this.paint(buildView(this.getModel(), this.stack[this.stack.length - 1]));
       this.el.querySelector(".sheet-body").scrollTop = this.scrolls[this.stack.length - 1] || 0;
     },
@@ -1513,8 +1525,10 @@
       var body = el.querySelector(".sheet-body");
       body.innerHTML = view.html;
       body.scrollTop = 0;
-      wireCharts(body);
+      if (el.open) body.focus({ preventScroll: true }); // the old focus target was just replaced
     },
+    // The second tap of a quick double-tap lands on the view that the first tap just opened.
+    justNavigated: function (e) { return this.el.open && e.timeStamp - (this.navAt || 0) < 400; },
     close: function (fromPop) {
       if (!this.el.open) return;
       this.stack = [];
@@ -1538,9 +1552,9 @@
   };
 
   function buildView(m, route) {
-    var parts = route.split(":");
-    var fn = VIEWS[parts[0]];
-    try { return fn ? fn(m, parts[1]) : null; } catch (e) {
+    var i = route.indexOf(":");
+    var fn = VIEWS[i < 0 ? route : route.slice(0, i)];
+    try { return fn ? fn(m, i < 0 ? undefined : route.slice(i + 1)) : null; } catch (e) {
       if (root.console) console.error("Could not open " + route, e);
       return null;
     }
@@ -1594,6 +1608,7 @@
     function onActivate(e) {
       var t = e.target.closest ? e.target.closest("[data-open]") : null;
       if (!t) return;
+      if (e.type === "click" && (e.detail > 1 || Sheet.justNavigated(e))) return;
       if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
       if (e.type === "keydown") e.preventDefault();
       Sheet.open(t.getAttribute("data-open"));
@@ -1615,7 +1630,7 @@
 
     picker.addEventListener("change", function () {
       show(picker.value);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: root.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
     root.addEventListener("hashchange", function () {
       var id = location.hash.slice(1);

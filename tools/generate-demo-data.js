@@ -215,7 +215,7 @@ const plumbing = buildCompany({
     { id: "p2", name: "Carlos R.", role: "Plumber", baseJobs: 16, ticket: 420, addOnRate: 0.12 },
     { id: "p3", name: "Jenna S.", role: "Plumber", baseJobs: 15, ticket: 435, addOnRate: 0.14 },
     { id: "p4", name: "Tyler B.", role: "Plumber", baseJobs: 14, ticket: 395, addOnRate: 0.09 },
-    { id: "p5", name: "Andre W.", role: "Apprentice (hired Aug)", baseJobs: 12, ticket: 330, addOnRate: 0.05, ramp: [0.35, 0.4, 0.45, 0.5, 0.52, 0.55, 0.58, 0.6] },
+    { id: "p5", name: "Andre W.", role: "Apprentice (new hire)", baseJobs: 12, ticket: 330, addOnRate: 0.05, ramp: [0.35, 0.4, 0.45, 0.5, 0.52, 0.55, 0.58, 0.6] },
   ],
   quotesSent: [12, 13, 14, 15, 16, 17, 18, 19],
   closeRate: [0.47, 0.44, 0.44, 0.42, 0.38, 0.35, 0.33, 0.27],

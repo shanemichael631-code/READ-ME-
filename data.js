@@ -31,7 +31,7 @@ window.REPORT_DATA = {
     {"id":"p2","name":"Carlos R.","role":"Plumber"},
     {"id":"p3","name":"Jenna S.","role":"Plumber"},
     {"id":"p4","name":"Tyler B.","role":"Plumber"},
-    {"id":"p5","name":"Andre W.","role":"Apprentice (hired Aug)"}
+    {"id":"p5","name":"Andre W.","role":"Apprentice (new hire)"}
    ],
    weeks: [
     {
