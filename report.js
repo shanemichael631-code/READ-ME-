@@ -832,7 +832,7 @@
         s.push(t.name + " is running well behind the team, with " + t.jobs + " jobs against an average of " + Math.round(m.team.jobs) + ".");
       } else if (m.leaks.items.length) {
         var top = m.leaks.items[0];
-        s.push("The biggest item to look at is " + top.title.charAt(0).toLowerCase() + top.title.slice(1) + " (" + money(top.amount) + ").");
+        s.push("The biggest item to look at: " + top.title + " (" + money(top.amount) + ").");
       } else {
         s.push("No big leaks this week.");
       }
