@@ -413,7 +413,9 @@ const header = `/*
 `;
 function pretty(v, indent) {
   const flat = JSON.stringify(v);
-  if (v === null || typeof v !== "object" || flat.length + indent.length < 150) return flat;
+  const isLeaf = (x) => x === null || typeof x !== "object";
+  // one record per line: inline anything whose values are all primitives
+  if (isLeaf(v) || Object.values(v).every(isLeaf)) return flat;
   const pad = indent + " ";
   if (Array.isArray(v)) return "[\n" + v.map((x) => pad + pretty(x, pad)).join(",\n") + "\n" + indent + "]";
   return "{\n" + Object.keys(v).map((k) => pad + k + ": " + pretty(v[k], pad)).join(",\n") + "\n" + indent + "}";
