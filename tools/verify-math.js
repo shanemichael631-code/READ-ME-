@@ -33,7 +33,8 @@ for (const c of data.companies) {
     const mw = m.weeks[i];
     check(`${start} quotes sent`, mw.quotesSent, sent);
     check(`${start} quotes won`, mw.quotesWon, won);
-    check(`${start} close rate`, mw.closeRate, won / sent);
+    if (sent) check(`${start} close rate`, mw.closeRate, Math.min(1, won / sent));
+    else check(`${start} close rate is null when nothing sent`, mw.closeRate === null ? 1 : 0, 1);
     check(`${start} avg ticket`, mw.avgTicket, w.revenue / w.jobsCompleted);
     const unpaid = c.invoices.filter((x) => x.issuedDate <= end && (!x.paidDate || x.paidDate > end) && (day(snap) - day(x.issuedDate)) / 864e5 >= 30)
       .reduce((s, x) => s + x.amount, 0);
@@ -88,11 +89,21 @@ for (const c of data.companies) {
   const fu = m.changes.items.find((x) => x.key === "followup");
   const cr = m.scorecard.find((t) => t.key === "closeRate");
   if (fu && cr.avg4 - cr.value > 0.03) {
-    const weeklySent = m.weeks.slice(-4).reduce((s, w) => s + w.quotesSentValue, 0) / 4;
+    const weeklySent = m.weeks.slice(-5, -1).reduce((s, w) => s + w.quotesSentValue, 0) / 4;
     check("follow-up yearly = weekly $ sent × drop × 52 × share", fu.yearly, weeklySent * (cr.avg4 - cr.value) * 52 * Engine.CONFIG.recoverShare, 1e-6);
   }
   const col = m.changes.items.find((x) => x.key === "collections");
   if (col) check("collections one-time = unpaid30 × collect rate", col.oneTime, m.cur.unpaid30 * Engine.CONFIG.collectRate, 1e-6);
+
+  // Hero "Upside" = Changes sheet headline = yearly + one-time
+  check("upside = yearly + one-time", m.changes.yearlyTotal + m.changes.oneTimeTotal, m.changes.items.reduce((s, x) => s + x.yearly + x.oneTime, 0));
+  // Callback action and callback change use the same savings number
+  const cbA = m.actions.find((a) => a.kind === "callbacks");
+  const cbC = m.changes.items.find((x) => x.key === "callbacks");
+  if (cbA && cbC) {
+    const nums = (t) => (t.match(/\$[\d,]+/g) || []).slice(0, 1).join();
+    check("callback savings match (action vs change): " + nums(cbA.impact) + " vs " + nums(cbC.impactText), nums(cbA.impact) === nums(cbC.impactText) ? 1 : 0, 1);
+  }
 
   // Money leaks total = sum of items
   check("leaks total = sum of items", m.leaks.total, m.leaks.items.reduce((s, x) => s + x.amount, 0));

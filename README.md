@@ -16,7 +16,7 @@ Static site with no framework, no build step, and no external requests.
 
 ## Common changes
 
-- **Your company name:** `CONFIG.brandName` at the top of `report.js`.
+- **Product name and tagline:** `CONFIG.brand.name` and `CONFIG.brand.tagline` at the top of `report.js` (currently the fictional "Vanbrief"). The logo is the `logo()` function in `report.js` plus `icon.svg`.
 - **Thresholds** (5-day quotes, 30-day invoices, 75% of team average, and so on): `CONFIG` in `report.js`.
 - **Deep links:** `/#plumbing`, `/#hvac`, `/#pest` open a specific demo company.
 - **Dates:** the demo moves all dates forward automatically, so "last week" is always the most recent Mon–Sun. To turn that off, set `CONFIG.rollDatesToCurrentWeek = false`.

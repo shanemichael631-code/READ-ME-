@@ -151,13 +151,29 @@ function buildCompany(cfg) {
   });
   callbacks.sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  // Reviews
+  // Reviews: texts drawn without replacement from a shuffled pool, refilled only when empty
+  const rText = rng(cfg.seed + 7);
+  let textPool = [];
+  const usedByTech = {};
+  function nextReviewText(techId) {
+    if (!textPool.length) {
+      textPool = cfg.reviewTexts.slice();
+      for (let i = textPool.length - 1; i > 0; i--) { const j = Math.floor(rText() * (i + 1)); [textPool[i], textPool[j]] = [textPool[j], textPool[i]]; }
+    }
+    const used = usedByTech[techId] || (usedByTech[techId] = new Set());
+    let k = textPool.length - 1;
+    while (k > 0 && used.has(textPool[k])) k--; // prefer a text this tech hasn't had yet
+    const text = textPool.splice(k, 1)[0];
+    used.add(text);
+    return text;
+  }
   const reviews = [];
   WEEK_STARTS.forEach((ws, w) => {
     for (let i = 0; i < cfg.reviewsPerWeek[w]; i++) {
       const t = cfg.techs[Math.floor(r() * cfg.techs.length)];
       const rating = r() < 0.86 ? 5 : 4;
-      const text = cfg.reviewTexts[Math.floor(r() * cfg.reviewTexts.length)].replace("{tech}", t.name.split(" ")[0]);
+      r(); // keep the main RNG sequence identical to earlier versions
+      const text = nextReviewText(t.id).replace("{tech}", t.name.split(" ")[0]);
       reviews.push({ date: addDays(ws, Math.floor(r() * 7)), customer: pickName(), rating, techId: t.id, text });
     }
   });
@@ -236,6 +252,18 @@ const plumbing = buildCompany({
     "{tech} found the leak fast and didn't try to upsell us on stuff we didn't need.",
     "Fair price, clear communication, and {tech} sent photos of the work. Highly recommend.",
     "Called at 8, {tech} was here by 11. Fixed our main line backup and walked me through the camera video.",
+    "{tech} replaced two shutoff valves and the kitchen faucet in under an hour. Neat work, no mess.",
+    "Our toilet ran for months. {tech} fixed it for a fraction of what I expected.",
+    "{tech} explained our options on the water heater without any pressure. We went with the mid option and love it.",
+    "Got a text when {tech} was on the way, right on the dot. That alone sold me.",
+    "Slab leak scare. {tech} found it, rerouted the line, and the patch is barely visible.",
+    "{tech} noticed our pressure was way too high and fixed the regulator. Nobody else ever caught that.",
+    "Third time using them. {tech} remembered our house and the quirky old pipes.",
+    "Garbage disposal died the night before Thanksgiving prep. {tech} swapped it the next morning.",
+    "Honest and quick. {tech} said our 12-year-old heater still had life and just replaced the anode rod.",
+    "{tech} cleared the drain, ran the camera, and showed us the root issue on a tablet. Very thorough.",
+    "Price was exactly what was quoted. {tech} even hauled the old fixtures away.",
+    "We have well water and {tech} knew exactly which filter setup we needed. Water tastes great now.",
   ],
   reviewAnchors: [
     { date: "2026-10-01", customer: "Harriet K.", rating: 5, techId: "p1", text: "Mike replaced our 18-year-old water heater, hauled the old one away, and caught a bad expansion tank before it flooded the garage. Best plumber we've had in 20 years in The Villages." },
@@ -295,10 +323,21 @@ const hvac = buildCompany({
   reviewsPerWeek: [5, 4, 6, 5, 6, 5, 6, 7],
   reviewTexts: [
     "AC died in 95 degree heat. {tech} had it running in an hour. Can't thank them enough.",
-    "{tech} was honest — said our system had a few years left and just fixed the capacitor. Earned a customer for life.",
+    "{tech} was honest: said our system had a few years left and just fixed the capacitor. Earned a customer for life.",
     "Great install crew. {tech} explained the new thermostat and left the place spotless.",
     "On time, friendly, and {tech} showed me photos of the dirty coil before and after.",
     "Signed up for the maintenance plan after {tech}'s visit. Worth it for the priority service alone.",
+    "{tech} cleared our condensate line and showed me how to keep it from clogging again.",
+    "Upstairs was always 5 degrees hotter. {tech} balanced the dampers and fixed it in one visit.",
+    "No upsell, no pressure. {tech} gave us three options for the replacement and let us decide.",
+    "{tech} came out on a Saturday for a no-cool call. Fair price for a weekend.",
+    "Our power bill dropped noticeably after {tech} cleaned the coils and fixed a leaky duct.",
+    "{tech} wore boot covers, laid down a drop cloth, and cleaned up the attic access. Rare these days.",
+    "Quick diagnosis. {tech} found a bad contactor, had the part on the truck, done in 40 minutes.",
+    "The tune-up was thorough. {tech} walked me through every reading on the report.",
+    "{tech} spotted mold starting in the air handler and handled it before it spread.",
+    "Booked online at 7am, {tech} was here by lunch. AC blowing cold again.",
+    "Second opinion from {tech} saved us from replacing a system that just needed a new motor.",
   ],
   reviewAnchors: [
     { date: "2026-09-30", customer: "Bill & Jan F.", rating: 5, techId: "h1", text: "Ray and the crew swapped our whole system in one day, pulled the permit, and the house is 6 degrees cooler on the same setting. Power bill already looks better." },
@@ -368,6 +407,14 @@ const pest = buildCompany({
     "Great service. {tech} took care of the fire ants around the pool cage in one visit.",
     "{tech} explained exactly what was being treated and why. Very knowledgeable.",
     "Switched from a big national company and the difference is night and day. Thanks {tech}!",
+    "{tech} found where the roaches were getting in and sealed it up. Haven't seen one since.",
+    "Friendly, careful around our dogs, and {tech} closed the gate behind them every time.",
+    "{tech} treated the lanai for spiders and the webs stopped coming back.",
+    "Mosquitoes were brutal this summer. After {tech} started the plan we can use the yard again.",
+    "{tech} spotted rodent droppings in the garage and set up exclusion the same week.",
+    "Quarterly service is easy. {tech} sends a summary after each visit with what was done.",
+    "{tech} answered all my questions about what's safe for the kids and pets. Appreciated that.",
+    "Ants in the kitchen were gone within two days of {tech}'s treatment.",
   ],
   reviewAnchors: [
     { date: "2026-10-02", customer: "Sharon D.", rating: 5, techId: "x3", text: "Hector found termite mud tubes the last company missed for two years, treated the whole slab, and sent us the warranty paperwork the same day. Honest and thorough." },

@@ -65,6 +65,7 @@
     return money(Math.round(n / step) * step);
   }
   function pct(x, digits) { return (x * 100).toFixed(digits || 0) + "%"; }
+  function rate(v) { return v === null || v === undefined ? "–" : pct(v); }
   function pts(x) { var n = Math.abs(Math.round(x * 100)); return n + (n === 1 ? " pt" : " pts"); }
   function sum(arr, fn) { return arr.reduce(function (s, x) { return s + (fn ? fn(x) : x); }, 0); }
   function mean(arr) { return arr.length ? sum(arr) / arr.length : 0; }
@@ -181,7 +182,8 @@
       quotesWonList: won,
       quotesSentValue: sum(sent, function (q) { return q.amount; }),
       quotesWonValue: sum(won, function (q) { return q.amount; }),
-      closeRate: sent.length ? won.length / sent.length : 0,
+      // won this week ÷ sent this week; null when nothing was sent, capped at 100%
+      closeRate: sent.length ? Math.min(1, won.length / sent.length) : null,
       openInvoices: openInvoices,
       unpaid30List: unpaid30,
       unpaid30: sum(unpaid30, function (x) { return x.amount; }),
@@ -201,7 +203,7 @@
     { key: "revenue", label: "Revenue", fmt: money, good: "up" },
     { key: "jobs", label: "Jobs", fmt: String, good: "up" },
     { key: "avgTicket", label: "Avg Ticket", fmt: money, good: "up" },
-    { key: "closeRate", label: "Close Rate", fmt: pct, good: "up", points: true },
+    { key: "closeRate", label: "Close Rate", fmt: rate, good: "up", points: true },
     { key: "newLeads", label: "New Leads", fmt: String, good: "up" },
     { key: "unpaid30", label: "Unpaid 30+ Days", fmt: money, good: "down" },
     { key: "callbacks", label: "Callbacks", fmt: String, good: "down" },
@@ -214,15 +216,16 @@
     var base = weeks.slice(-5, -1); // the 4 weeks before last week
     return SCORECARD.map(function (def) {
       var v = cur[def.key], p = prev[def.key];
-      var avg4 = mean(base.map(function (w) { return w[def.key]; }));
-      var delta = def.points ? v - p : change(v, p);
-      var vsAvg = def.points ? v - avg4 : change(v, avg4);
+      var known = base.map(function (w) { return w[def.key]; }).filter(function (x) { return x !== null; });
+      var avg4 = known.length ? mean(known) : null;
+      var delta = v === null || p === null ? null : def.points ? v - p : change(v, p);
+      var vsAvg = v === null || avg4 === null ? null : def.points ? v - avg4 : change(v, avg4);
       return {
         key: def.key, label: def.label, def: def,
         value: v, prev: p, avg4: avg4,
         delta: delta, vsAvg: vsAvg,
         tone: tone(delta, def), avgTone: tone(vsAvg, def),
-        series: weeks.map(function (w) { return w[def.key]; }),
+        series: weeks.map(function (w) { return w[def.key] === null ? 0 : w[def.key]; }),
       };
     });
   }
@@ -233,11 +236,17 @@
     return (def.good === "up") === up ? "good" : "bad";
   }
 
+  function activeTechs(cur) {
+    var a = cur.techs.filter(function (t) { return t.jobs > 0; });
+    return a.length ? a : cur.techs;
+  }
+
   function teamAverages(cur) {
+    var a = activeTechs(cur);
     return {
-      jobs: mean(cur.techs.map(function (t) { return t.jobs; })),
-      revenue: mean(cur.techs.map(function (t) { return t.revenue; })),
-      callbacks: mean(cur.techs.map(function (t) { return t.callbacks; })),
+      jobs: mean(a.map(function (t) { return t.jobs; })),
+      revenue: mean(a.map(function (t) { return t.revenue; })),
+      callbacks: mean(a.map(function (t) { return t.callbacks; })),
       avgTicket: cur.avgTicket,
       addOnRate: cur.jobs ? sum(cur.techs, function (t) { return t.addOns; }) / cur.jobs : 0,
     };
@@ -299,6 +308,7 @@
 
   function techFlags(cur, team) {
     return cur.techs.filter(function (t) {
+      if (!t.jobs) return false; // out all week — not a performance problem
       return t.jobs < team.jobs * CONFIG.techBelowAvg || t.revenue < team.revenue * CONFIG.techBelowAvg;
     }).map(function (t) {
       return { tech: t, gap: Math.max(0, team.revenue - t.revenue) };
@@ -315,6 +325,12 @@
     if (!worst || !isCallbackFlag(worst, team)) return null;
     var monthAgo = find(weeks[weeks.length - 5].techs, function (t) { return t.id === worst.id; });
     return { tech: worst, monthAgo: monthAgo ? monthAgo.callbacks : 0, teamTotal: cur.callbacks };
+  }
+
+  // Halving a tech's recent callback rate, per year (trailing 4 weeks incl. last week).
+  function techCallbackSavings(c, weeks, techId) {
+    var recent = weeks.slice(-4).map(function (w) { return find(w.techs, function (t) { return t.id === techId; }).callbacks; });
+    return mean(recent) * c.callbackCostEstimate * 52 * 0.5;
   }
 
   function topIssue(list) {
@@ -366,7 +382,7 @@
       var byTech = cur.techs.filter(function (t) { return t.callbacks; }).sort(byDesc(function (t) { return t.callbacks; }));
       items.push({
         kind: "callbacks",
-        title: "Cost of callbacks",
+        title: "Callback cost last week",
         amount: cur.callbacks * c.callbackCostEstimate,
         detail: plural(cur.callbacks, "redo visit") + " × ~" + money(c.callbackCostEstimate) + " each (labor, truck, parts). Nobody gets paid for these.",
         rows: byTech.slice(0, 3).map(function (t) { return [t.name, plural(t.callbacks, "callback"), money(t.callbacks * c.callbackCostEstimate)]; }),
@@ -437,7 +453,9 @@
         kind: "unpaid",
         value: collect,
         title: "Call " + lead.customer + " (" + money(lead.amount) + ", " + lead.daysOutstanding + " days)" + (u.list.length > 1 ? " and " + plural(u.list.length - 1, "other") : "") + " about " + money(u.amount) + " unpaid 30+ days.",
-        detail: "Oldest first: " + listNames(u.list.slice(0, 3).map(function (x) { return x.customer + " (" + x.daysOutstanding + " days)"; })) + ". Offer card-on-file or a 2-payment split today.",
+        detail: (lead === oldest ? "Oldest first: " : "After " + firstName(lead.customer) + ", go oldest first: ") +
+          listNames((lead === oldest ? u.list : u.list.filter(function (x) { return x !== lead; })).slice(0, 3).map(function (x) { return x.customer + " (" + x.daysOutstanding + " days)"; })) +
+          ". Offer card-on-file or a 2-payment split today.",
         impact: "Collecting " + pct(CONFIG.collectRate) + " puts about " + approx(collect) + " back in the bank this week.",
         open: "leak:unpaid",
       });
@@ -449,14 +467,14 @@
       var planValue = sum(t.callbackList, function (x) { return x.recurringPlanValue || 0; });
       var badReview = find(cur.reviewList, function (r) { return r.techId === t.id && r.rating <= 3; });
       var busiest = cur.techs.slice().sort(byDesc(function (x) { return x.jobs; }))[0];
-      var monthlySave = (t.callbacks / 2) * c.callbackCostEstimate * 4.33;
+      var yearlySave = techCallbackSavings(c, weeks, t.id);
       out.push({
         kind: "callbacks",
-        value: planValue + monthlySave,
-        title: "Ride along with " + t.name + " for half a day. " + t.callbacks + " of the team's " + cb.teamTotal + " callbacks were " + firstName(t.name) + "'s.",
+        value: planValue + yearlySave / 12,
+        title: "Ride along with " + t.name + " for half a day. " + (t.callbacks === cb.teamTotal ? "All " + t.callbacks : t.callbacks + " of the team's " + cb.teamTotal) + " callbacks were " + firstName(t.name) + "'s.",
         detail: "Up from " + cb.monthAgo + " a month ago. Most common: “" + topIssue(t.callbackList).toLowerCase() + ".”" + (badReview ? " One customer left a " + badReview.rating + "-star review about it." : "") +
           (busiest.id === t.id ? " " + firstName(t.name) + " also ran the most stops (" + t.jobs + "), so speed may be the issue." : ""),
-        impact: "Cutting those in half saves about " + approx(monthlySave) + "/month" + (planValue ? " and protects " + approx(planValue) + "/yr in recurring plans." : "."),
+        impact: "Cutting those in half saves about " + approx(yearlySave) + "/yr" + (planValue ? " and protects " + approx(planValue) + "/yr in recurring plans." : "."),
         open: "tech:" + t.id,
       });
     }
@@ -475,7 +493,7 @@
     });
 
     var ag = addOnGap(c, cur);
-    if (ag.weekly > 0) {
+    if (realAddOnGap(ag)) {
       out.push({
         kind: "addons",
         value: ag.weekly,
@@ -486,8 +504,26 @@
       });
     }
 
+    // Fallback: walk through last week's callbacks when no single tech stands out.
+    if (!cb && cur.callbacks >= 2) {
+      out.push({
+        kind: "callback-review",
+        value: cur.callbacks * c.callbackCostEstimate,
+        title: "Go over last week's " + cur.callbacks + " callbacks at the Monday huddle.",
+        detail: listNames(cur.callbackList.map(function (x) { return techName2(c, x.techId) + ": " + x.issue.toLowerCase(); })) + ". Five minutes, no blame: what would have prevented each one?",
+        impact: "At about " + money(c.callbackCostEstimate) + " per redo visit, last week's callbacks cost " + money(cur.callbacks * c.callbackCostEstimate) + ".",
+        open: "metric:callbacks",
+      });
+    }
+
     out.sort(byDesc(function (a) { return a.value; }));
     return out.slice(0, 3);
+  }
+
+  function techName2(c, id) { var t = find(c.techs, function (x) { return x.id === id; }); return t ? t.name : id; }
+
+  function realAddOnGap(ag) {
+    return ag.weekly > 0 && ag.best.jobs >= 15 && ag.best.addOnRate - ag.restRate >= 0.05;
   }
 
   function wins(c, weeks) {
@@ -532,26 +568,26 @@
   // Each change only appears when the data shows the problem.
   function changes(c, model) {
     var weeks = model.weeks, cur = model.cur, team = model.team;
-    var last4 = weeks.slice(-4);
+    var last4 = weeks.slice(-5, -1); // same 4-week baseline the scorecard uses
     var cr = find(model.scorecard, function (x) { return x.key === "closeRate"; });
     var stale = find(model.leaks.items, function (x) { return x.kind === "quotes"; });
     var out = [];
 
     // 1. Quote follow-up on autopilot
-    var drop = cr.avg4 - cr.value;
+    var drop = cr.value === null || cr.avg4 === null ? 0 : cr.avg4 - cr.value;
     if (drop > 0.03 || stale) {
       var weeklySent = mean(last4.map(function (w) { return w.quotesSentValue; }));
       var yearly = drop > 0.03 ? weeklySent * drop * 52 * CONFIG.recoverShare : 0;
-      var oneTime = stale ? stale.amount * cr.avg4 : 0;
+      var oneTime = stale ? stale.amount * (cr.avg4 || 0) : 0;
       out.push({
         key: "followup",
         title: "Put quote follow-up on autopilot",
         evidence: drop > 0.03
-          ? "Close rate slid from " + pct(cr.avg4) + " to " + pct(cr.value) + " while you quoted about " + approx(weeklySent) + " a week. " + (stale ? plural(stale.list.length, "quote") + " (" + money(stale.amount) + ") have had no follow-up at all." : "")
+          ? "Close rate slid from a " + pct(cr.avg4) + " average to " + pct(cr.value) + " while you were quoting about " + approx(weeklySent) + " a week. " + (stale ? plural(stale.list.length, "quote") + " (" + money(stale.amount) + ") have had no follow-up at all." : "")
           : plural(stale.list.length, "quote") + " (" + money(stale.amount) + ") are more than " + CONFIG.staleQuoteDays + " days old with no follow-up.",
         steps: [
           "Turn on automatic quote follow-ups in your field-service software: a text on day 2 and again on day 10.",
-          "Make one person own the list. They call every open quote over $1,500 on day 5.",
+          "Make one person own the list. They call every open quote on day 5, biggest first.",
           "On day 14, mark each quote won or lost and note why. Fix the top lost reason each month.",
         ],
         effort: "Low",
@@ -585,7 +621,7 @@
           "Offer card-on-file at booking so payment happens the day the job is done.",
         ]).concat([
           pm ? "Get the property manager's AP contact and a work-order number before any job starts (" + pm.customer + " owes " + money(pm.amount) + ")."
-            : "Every Monday, call each invoice 15+ days late and text a pay link.",
+            : "Every Monday, call the customer on every invoice 15+ days late and text a pay link.",
         ]).concat(over60.length ? [
           "For the " + plural(over60.length, "invoice") + " past 60 days, send a written demand now. Florida's lien deadline is 90 days after the last day of work, so talk to your attorney before then.",
         ] : []),
@@ -600,18 +636,18 @@
     }
 
     // 3. Callbacks: coaching (if one tech stands out) or a job checklist
-    var weeklyCb = mean(last4.map(function (w) { return w.callbacks; }));
+    var weeklyCb = mean(last4.map(function (w) { return w.callbacks; })); // = the Callbacks tile's 4-wk avg
     var yearlyCbCost = weeklyCb * c.callbackCostEstimate * 52;
     var cbt = callbackTech(weeks, team);
     if (cbt || weeklyCb >= 2) {
       var plans = cbt ? sum(cbt.tech.callbackList, function (x) { return x.recurringPlanValue || 0; }) : 0;
-      var save = cbt ? yearlyCbCost * 0.5 : yearlyCbCost * CONFIG.checklistCut;
+      var save = cbt ? techCallbackSavings(c, weeks, cbt.tech.id) : yearlyCbCost * CONFIG.checklistCut;
       out.push({
         key: "callbacks",
         title: cbt ? "Coach " + cbt.tech.name + " and cap daily stops" : "Add a 2-minute closeout checklist to every job",
         evidence: cbt
-          ? firstName(cbt.tech.name) + " had " + cbt.tech.callbacks + " of " + cbt.teamTotal + " callbacks last week (up from " + cbt.monthAgo + " a month ago) while running " + cbt.tech.jobs + " stops vs. a team average of " + Math.round(team.jobs) + "."
-          : "You're averaging " + weeklyCb.toFixed(1) + " callbacks a week, about " + approx(yearlyCbCost) + "/yr in unpaid redo visits.",
+          ? firstName(cbt.tech.name) + " had " + (cbt.tech.callbacks === cbt.teamTotal ? "all " + cbt.tech.callbacks : cbt.tech.callbacks + " of " + cbt.teamTotal) + " callbacks last week (up from " + cbt.monthAgo + " a month ago) while running " + cbt.tech.jobs + " stops vs. a team average of " + Math.round(team.jobs) + "."
+          : "You averaged " + weeklyCb.toFixed(1) + " callbacks a week over the 4 weeks before last, about " + approx(yearlyCbCost) + "/yr in unpaid redo visits.",
         steps: cbt ? [
           "Visit the callback homes and log the real cause: missed area, wrong ID, or product.",
           "Ride the route for a full day against a written service checklist.",
@@ -626,7 +662,7 @@
         setup: cbt ? "Half a day" : "1 hour",
         yearly: save,
         oneTime: 0,
-        impactText: "Saves about " + approx(save) + "/yr in redo visits" + (plans ? " and protects " + approx(plans) + "/yr in recurring plans." : "."),
+        impactText: (cbt ? "Halving " + firstName(cbt.tech.name) + "'s callbacks saves about " : "Saves about ") + approx(save) + "/yr in redo visits" + (plans ? " and protects " + approx(plans) + "/yr in recurring plans." : "."),
         open: cbt ? "tech:" + cbt.tech.id : "metric:callbacks",
       });
     }
@@ -655,7 +691,7 @@
 
     // 5. Add-on menu (only when the gap is real: 5+ points)
     var ag = addOnGap(c, cur);
-    if (ag.weekly > 0 && ag.best.addOnRate - ag.restRate >= 0.05) {
+    if (realAddOnGap(ag)) {
       var yrA = ag.weekly * 52;
       out.push({
         key: "addons",
@@ -679,8 +715,8 @@
     var weeklyReviews = mean(last4.map(function (w) { return w.newReviews; }));
     out.push({
       key: "reviews",
-      title: "Ask for a review on every 5-star job",
-      evidence: "You're getting about " + weeklyReviews.toFixed(1) + " new Google reviews a week on " + Math.round(mean(last4.map(function (w) { return w.jobs; }))) + " jobs.",
+      title: "Ask every happy customer for a Google review",
+      evidence: "You averaged " + weeklyReviews.toFixed(1) + " new Google reviews a week on about " + Math.round(mean(last4.map(function (w) { return w.jobs; }))) + " jobs over the 4 weeks before last.",
       steps: [
         "Copy your Google review link and QR code from your Business Profile.",
         "Techs mention it at the door; the office texts the link within 2 hours, with one reminder on day 3.",
@@ -690,12 +726,12 @@
       setup: "30 minutes",
       yearly: 0,
       oneTime: 0,
-      impactText: "More recent 5-star reviews means more calls from Google, at no ad cost.",
+      impactText: "More recent 5-star reviews mean more calls from Google, at no ad cost.",
       open: "metric:newReviews",
     });
 
     // The change that fixes this week's #1 problem goes first; the rest by dollar value.
-    var KIND_TO_CHANGE = { quotes: "followup", unpaid: "collections", callbacks: "callbacks", tech: "ramp", addons: "addons" };
+    var KIND_TO_CHANGE = { quotes: "followup", unpaid: "collections", callbacks: "callbacks", "callback-review": "callbacks", tech: "ramp", addons: "addons" };
     var lead = model.actions[0] ? KIND_TO_CHANGE[model.actions[0].kind] : null;
     out.sort(function (a, b) {
       if ((a.key === lead) !== (b.key === lead)) return a.key === lead ? -1 : 1;
@@ -767,8 +803,10 @@
       if (isRecord) open += ", your best week in " + m.weeks.length + " weeks";
       if (isRecord && vsAvg > 0.05) open += ", " + pct(vsAvg) + " above your 4-week average.";
       else if (Math.abs(revChg) < 0.02) open += ", about even with the week before.";
-      else if (!isRecord && Math.abs(vsAvg) < 0.04) open += ", right in line with your 4-week average.";
-      else open += ", " + (revChg > 0 ? "up " : "down ") + pct(Math.abs(revChg)) + " from the week before.";
+      else {
+        open += ", " + (revChg > 0 ? "up " : "down ") + pct(Math.abs(revChg)) + " from the week before";
+        open += Math.abs(vsAvg) >= 0.02 ? " and " + pct(Math.abs(vsAvg)) + (vsAvg > 0 ? " over" : " under") + " your 4-week average." : ".";
+      }
       s.push(open);
 
       var lead = m.actions[0] ? m.actions[0].kind : null;
@@ -777,18 +815,18 @@
 
       if (lead === "quotes") {
         var q = leakOf("quotes");
-        s.push("The leak is follow-up: " + plural(q.list.length, "quote") + " worth " + money(q.amount) + " are sitting with no call back.");
-        if (cr.vsAvg < -0.03) s.push("That's why your close rate slid to " + pct(cr.value) + " from a " + pct(cr.avg4) + " average: we're quoting work and walking away from it.");
+        s.push("The leak is follow-up: " + plural(q.list.length, "quote") + " worth " + money(q.amount) + (q.list.length === 1 ? " is" : " are") + " sitting with no follow-up call.");
+        if (cr.vsAvg !== null && cr.vsAvg < -0.03) s.push("That's likely part of why your close rate slid to " + pct(cr.value) + " from a " + pct(cr.avg4) + " average: quotes go out, but nobody chases them.");
       } else if (lead === "unpaid") {
         var u = leakOf("unpaid");
         var oldest = u.list[0];
         var unp = find(m.scorecard, function (x) { return x.key === "unpaid30"; });
         s.push("The problem is collections: " + money(u.amount) + " is sitting in invoices more than " + CONFIG.unpaidDays + " days old" + (unp.prev ? ", up from " + money(unp.prev) + " a week ago" : "") + ".");
-        s.push("We're doing the work, then floating the bill: " + oldest.customer + " is at " + oldest.daysOutstanding + " days.");
+        s.push("You're doing the work, then waiting on the money: " + oldest.customer + " is at " + oldest.daysOutstanding + " days.");
       } else if (lead === "callbacks") {
         var cb = callbackTech(m.weeks, m.team);
-        s.push("The one thing to watch is " + cb.tech.name + ": " + cb.tech.callbacks + " of the team's " + cb.teamTotal + " callbacks came from " + firstName(cb.tech.name) + "'s jobs, up from " + cb.monthAgo + " a month ago.");
-        s.push("Callbacks cost us twice: a free truck roll now and a cancelled plan later.");
+        s.push("The one thing to watch is " + cb.tech.name + ": " + (cb.tech.callbacks === cb.teamTotal ? "all " + cb.tech.callbacks : cb.tech.callbacks + " of the team's " + cb.teamTotal) + " callbacks came from " + firstName(cb.tech.name) + "'s jobs, up from " + cb.monthAgo + " a month ago.");
+        s.push("Callbacks cost twice: a free truck roll now and a cancelled plan later.");
       } else if (lead === "tech") {
         var t = leakOf("tech").flag.tech;
         s.push(t.name + " is running well behind the team, with " + t.jobs + " jobs against an average of " + Math.round(m.team.jobs) + ".");
@@ -798,10 +836,10 @@
 
       if (s.length < 3) {
         var leads = find(m.scorecard, function (x) { return x.key === "newLeads"; });
-        if (leads.vsAvg > 0.05) s.push("Leads are up " + pct(leads.vsAvg) + " over your 4-week average, so the phone is working.");
+        if (leads.vsAvg !== null && leads.vsAvg > 0.05) s.push("Leads are up " + pct(leads.vsAvg) + " over your 4-week average, so the phone is working.");
         else if (cur.avgRating) s.push(plural(cur.newReviews, "new review") + " averaging " + cur.avgRating.toFixed(1) + " stars. Customers are happy with the work.");
       }
-      if (s.length < 4) s.push("Start with #1 below today.");
+      if (s.length < 4 && m.actions.length) s.push("Start with #1 below today.");
       return s.slice(0, 4);
     },
   };
@@ -864,6 +902,7 @@
     return pct(Math.abs(t.delta));
   }
   function fmtAvg(t) {
+    if (t.avg4 === null) return "–";
     return t.def.points ? pct(t.avg4) : t.def.fmt === money ? moneyShort(t.avg4) : (Math.round(t.avg4 * 10) / 10).toString();
   }
   function fmtVsAvg(t) {
@@ -1025,7 +1064,7 @@
       var opener = x.kind === "tech" ? "tech:" + x.flag.tech.id : "leak:" + x.kind;
       return (
         '<button type="button" class="leak is-link" data-open="' + opener + '">' +
-        '<span class="leak-top"><span class="leak-title">' + esc(x.title) + '</span><span class="leak-amt">' + money(x.amount) + "</span></span>" +
+        '<span class="leak-top"><span class="leak-title">' + esc(x.title) + '</span><span class="leak-amt">' + money(x.amount) + (x.kind === "tech" ? '<small>/wk</small>' : "") + "</span></span>" +
         '<span class="leak-detail">' + esc(x.detail) + "</span>" +
         '<span class="leak-rows">' + rows + "</span>" +
         '<span class="more">' + (x.more > 0 ? "See all " + (x.rows.length + x.more) : "See details") + icon("chevron") + "</span>" +
@@ -1068,7 +1107,7 @@
         '<span class="fn-bar"><i style="width:' + Math.max(4, (s.value / fmax) * 100).toFixed(1) + '%"></i></span>' +
         '<span class="fn-l">' + s.label + '</span><span class="fn-v">' + s.value + (s.sub ? '<small>' + s.sub + "</small>" : "") + "</span></button>";
     }).join("") + "</div>";
-    var rateLine = '<p class="fn-rate">Close rate <b>' + pct(m.cur.closeRate) + "</b> · " + p.won + " won of " + p.sent + " sent last week</p>";
+    var rateLine = '<p class="fn-rate">Close rate <b>' + rate(m.cur.closeRate) + "</b> · " + p.won + " won, " + p.sent + " new quotes sent last week</p>";
     var b = '<div class="buckets">' + p.buckets.map(function (bk) {
       return '<button type="button" class="bucket is-link tone-' + bk.tone + '" data-open="pipeline:' + bk.key + '">' +
         '<span class="bk-l">' + bk.label + '</span><span class="bk-v">' + money(bk.amount) + '</span><span class="bk-s">' + plural(bk.count, "quote") + "</span></button>";
@@ -1085,7 +1124,7 @@
       return (
         '<button type="button" class="lb-row is-link' + (flagged ? " lb-flag" : "") + '" data-open="tech:' + t.id + '" aria-label="' + esc(t.name + ", " + money(t.revenue) + ". Open tech details") + '">' +
         '<span class="lb-rank">' + (i + 1) + "</span>" +
-        '<span class="lb-name"><span class="lb-av">' + esc(initials(t.name)) + '</span><span><b>' + esc(t.name) + "</b>" + (flagged ? ' <span class="pill">Check in</span>' : "") + '<span class="lb-role">' + esc(t.role) + "</span>" +
+        '<span class="lb-name"><span class="lb-av">' + esc(initials(t.name)) + '</span><span><b>' + esc(t.name) + "</b>" + (flagged ? ' <span class="pill">Check in</span>' : "") + '<span class="lb-role">' + esc(t.role) + (t.jobs ? "" : " · no jobs last week") + "</span>" +
         '<span class="lb-bar" aria-hidden="true"><i style="width:' + Math.round((t.revenue / maxRev) * 100) + '%"></i></span></span></span>' +
         '<span class="lb-num lb-rev" data-l="Revenue">' + money(t.revenue) + "</span>" +
         '<span class="lb-num" data-l="Jobs">' + t.jobs + "</span>" +
@@ -1116,7 +1155,10 @@
         '<div class="a-foot"><span class="a-impact">' + esc(a.impact) + "</span>" +
         (a.open ? '<button type="button" class="a-link is-link" data-open="' + a.open + '">Details' + icon("chevron") + "</button>" : "") + "</div></div></li>";
     }).join("");
-    return section("actions", "Do These 3 Things This Week", "actions", '<ol class="actions">' + items + "</ol>" + '<p class="note screen-only">Tap a number to check it off. It stays checked on this phone.</p>', { cls: "card-actions" });
+    var n = m.actions.length;
+    var title = n === 1 ? "Do This 1 Thing This Week" : n ? "Do These " + n + " Things This Week" : "This Week";
+    if (!n) return section("actions", title, "actions", '<p class="empty">Nothing urgent. Keep doing what you\'re doing.</p>', { cls: "card-actions" });
+    return section("actions", title, "actions", '<ol class="actions">' + items + "</ol>" + '<p class="note screen-only">Tap a number to check it off. It stays checked on this phone.</p>', { cls: "card-actions" });
   }
 
   function renderWins(m) {
@@ -1128,9 +1170,12 @@
 
   function renderChanges(m) {
     var ch = m.changes;
-    var head =
-      '<div class="ch-summary"><p>If ' + esc(m.company.name) + " makes these " + plural(ch.items.length, "change") + ", the numbers point to about <b>" + approx(ch.yearlyTotal) + " a year</b>" +
-      (ch.oneTimeTotal ? " in extra profit and revenue, plus <b>" + approx(ch.oneTimeTotal) + "</b> in cash and jobs that are already sitting on the table." : ".") + "</p></div>";
+    var what = ch.items.length === 1 ? "this change" : "these " + ch.items.length + " changes";
+    var head = '<div class="ch-summary"><p>If ' + esc(m.company.name) + " makes " + what + ", " +
+      (ch.yearlyTotal
+        ? "the numbers point to about <b>" + approx(ch.yearlyTotal) + " a year</b> in extra profit and revenue" + (ch.oneTimeTotal ? ", plus <b>" + approx(ch.oneTimeTotal) + "</b> in cash and jobs already sitting on the table." : ".")
+        : ch.oneTimeTotal ? "there's about <b>" + approx(ch.oneTimeTotal) + "</b> in cash and jobs sitting on the table right now." : "it keeps the business running the way it is now.") +
+      "</p></div>";
     var cards = ch.items.map(function (x, i) {
       return '<article class="change">' +
         '<div class="ch-top"><span class="ch-n">' + (i + 1) + '</span><h3>' + esc(x.title) + "</h3></div>" +
@@ -1181,14 +1226,15 @@
   function weekLabels(m) { return m.weeks.map(function (w) { return slashDate(w.start); }); }
 
   function metricChart(m, key, fmt, short) {
-    var series = m.weeks.map(function (w) { return w[key]; });
-    var avg = mean(series);
+    var raw = m.weeks.map(function (w) { return w[key]; });
+    var series = raw.map(function (v) { return v === null ? 0 : v; });
+    var avg = mean(raw.filter(function (v) { return v !== null; }));
     var avgFmt = (short || fmt) === String ? function (v) { return (Math.round(v * 10) / 10).toString(); } : (short || fmt);
     return barChart({
       title: key, values: series, labels: weekLabels(m), fmt: fmt, short: short || fmt,
       avg: avg, avgLabel: "8-wk avg " + avgFmt(avg),
       openFor: function (i) { return "week:" + i; },
-      labelFor: function (i) { return "Week of " + shortDate(m.weeks[i].start) + ": " + fmt(series[i]); },
+      labelFor: function (i) { return "Week of " + shortDate(m.weeks[i].start) + ": " + (raw[i] === null ? "–" : fmt(raw[i])); },
     });
   }
 
@@ -1205,7 +1251,8 @@
       list.map(function (q) {
         return { cells: [
           "<b>" + esc(q.customer) + '</b><span class="cell-sub">' + esc(q.service) + (opts.showTech ? ' · <span class="nowrap">' + esc(opts.techName(q.techId)) + "</span>" : "") + "</span>",
-          opts.dateFn ? esc(opts.dateFn(q)) : '<span class="nowrap">' + esc(q.ageDays + " days") + "</span>" + (opts.hideFollow ? "" : q.lastFollowUpDate ? '<span class="cell-sub ok">Called ' + esc(shortDate(q.lastFollowUpDate)) + "</span>" : '<span class="cell-sub bad">No call yet</span>'),
+          opts.dateFn ? esc(opts.dateFn(q)) : '<span class="nowrap">' + esc(q.ageDays + " days") + "</span>" + (opts.hideFollow ? "" : q.lastFollowUpDate ? '<span class="cell-sub ok">Called ' + esc(shortDate(q.lastFollowUpDate)) + "</span>"
+            : q.ageDays <= CONFIG.staleQuoteDays ? '<span class="cell-sub nowrap">Not due yet</span>' : '<span class="cell-sub bad">No call yet</span>'),
           money(q.amount),
         ] };
       }),
@@ -1272,10 +1319,10 @@
           { label: "Quotes won", value: String(cur.quotesWon), sub: money(cur.quotesWonValue) },
           { label: "Won by value", value: cur.quotesSentValue ? pct(cur.quotesWonValue / cur.quotesSentValue) : "–", sub: "$ won ÷ $ sent" },
         ]);
-        body += h3("Last 8 weeks") + metricChart(m, "closeRate", function (v) { return pct(v); });
+        body += h3("Last 8 weeks") + metricChart(m, "closeRate", rate);
         body += h3("Won last week") + (cur.quotesWonList.length ? quoteRows(cur.quotesWonList.slice().sort(byDesc(function (q) { return q.amount; })), { dateLabel: "Won", dateFn: function (q) { return weekday(q.decidedDate) + " " + shortDate(q.decidedDate); } }) : '<p class="empty">None.</p>');
         body += h3("Sent last week") + quoteRows(cur.quotesSentList.slice().sort(byDesc(function (q) { return q.amount; })), { dateLabel: "Status", dateFn: function (q) { return q.status === "won" ? "Won" : q.status === "lost" ? "Lost" : "Open"; } });
-        body += '<p class="note">Close rate = quotes won that week ÷ quotes sent that week.</p>';
+        body += '<p class="note">Close rate = quotes won that week ÷ new quotes sent that week. Most quotes won in a week were sent in earlier weeks.</p>';
       } else if (key === "newLeads") {
         body += h3("Last 8 weeks") + metricChart(m, "newLeads", String);
         body += statGrid([
@@ -1308,6 +1355,7 @@
       var hist = techHistory(m.weeks, id);
       var cmp = function (v, avg, fmt, goodUp) {
         if (!avg) return { sub: "", tone: "" };
+        if (!v) return { sub: "None (team avg " + fmt(avg) + ")", tone: goodUp ? "bad" : "good" };
         var diff = change(v, avg);
         if (Math.abs(diff) < 0.03) return { sub: "≈ team avg " + fmt(avg), tone: "flat" };
         return { sub: pct(Math.abs(diff)) + (diff > 0 ? " above" : " below") + " team avg " + fmt(avg), tone: (diff > 0) === goodUp ? "good" : "bad" };
@@ -1326,7 +1374,7 @@
           { label: "Avg ticket", value: money(t.avgTicket), sub: tk.sub, tone: tk.tone },
           { label: "Add-ons", value: String(t.addOns), sub: pct(t.addOnRate) + " of jobs (team " + pct(team.addOnRate) + ")" },
           { label: "Callbacks", value: String(t.callbacks), sub: cbc.sub, tone: cbc.tone },
-          { label: "Review mentions", value: String(t.reviewMentions), sub: "last week" },
+          { label: "Reviews", value: String(t.reviewMentions), sub: "named " + firstName(t.name) + " last week" },
         ]) +
         '<h3 class="sub-h">Revenue, last 8 weeks</h3>' +
         barChart({ title: t.name + " revenue", values: hist.map(function (h) { return h.revenue; }), labels: weekLabels(m), fmt: money, short: moneyShort,
@@ -1342,9 +1390,9 @@
           allCb.slice().reverse().map(function (x) { return { cells: ["<b>" + esc(x.customer) + '</b><span class="cell-sub">' + esc(x.issue) + "</span>", esc(shortDate(x.date))] }; }));
       }
       if (openQ.length) {
-        body += '<h3 class="sub-h">Open quotes ' + esc(firstName(t.name)) + " wrote" + (staleQ.length ? ' · <span class="bad">' + staleQ.length + " need a call</span>" : "") + "</h3>" + quoteRows(openQ);
+        body += '<h3 class="sub-h">Open quotes ' + esc(firstName(t.name)) + " wrote" + (staleQ.length ? ' · <span class="bad">' + staleQ.length + (staleQ.length === 1 ? " needs" : " need") + " a call</span>" : "") + "</h3>" + quoteRows(openQ);
       }
-      body += '<h3 class="sub-h">Reviews that name ' + esc(firstName(t.name)) + "</h3>" + reviewList(m, allRv.slice(-4), id);
+      body += '<h3 class="sub-h">Latest reviews that name ' + esc(firstName(t.name)) + "</h3>" + reviewList(m, allRv.slice(-4), id);
       return { kicker: "Tech", title: t.name, html: body };
     },
 
@@ -1353,7 +1401,7 @@
       var body = statGrid([
         { label: "Revenue", value: money(w.revenue) },
         { label: "Jobs", value: String(w.jobs), sub: money(w.avgTicket) + " avg" },
-        { label: "Close rate", value: pct(w.closeRate), sub: w.quotesWon + " of " + w.quotesSent + " quotes" },
+        { label: "Close rate", value: rate(w.closeRate), sub: w.quotesWon + " won · " + w.quotesSent + " sent" },
         { label: "Callbacks", value: String(w.callbacks) },
       ]);
       body += '<h3 class="sub-h">By day</h3>' + barChart({ title: "Revenue by day", values: w.dailyRevenue, labels: DAY_SHORT, fmt: money, short: moneyShort, highlight: w.dailyRevenue.indexOf(Math.max.apply(null, w.dailyRevenue)), height: 150 });
@@ -1396,7 +1444,8 @@
     changes: function (m) {
       var body = '<div class="sheet-hero"><span class="sh-v pos">' + approx(m.changes.yearlyTotal + m.changes.oneTimeTotal) + '</span><span class="muted">' + approx(m.changes.yearlyTotal) + " a year" + (m.changes.oneTimeTotal ? " + " + approx(m.changes.oneTimeTotal) + " sitting on the table now" : "") + "</span></div>" +
         hbars(m.changes.items.map(function (x) {
-          return { label: x.title, sub: "Effort: " + x.effort + " · " + x.setup, value: x.yearly + x.oneTime, display: x.yearly ? approx(x.yearly) + "/yr" : approx(x.oneTime), tone: "good", open: x.open };
+          return { label: x.title, sub: "Effort: " + x.effort + " · " + x.setup, value: x.yearly + x.oneTime,
+            display: x.yearly ? approx(x.yearly) + "/yr" : x.oneTime ? approx(x.oneTime) + " now" : "No $ estimate", tone: "good", open: x.open };
         }));
       return { kicker: "Changes Worth Making", title: "The bigger picture", html: body };
     },
