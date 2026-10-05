@@ -343,7 +343,9 @@
     if (cb) {
       var t = cb.tech;
       var planValue = sum(t.callbackList, function (x) { return x.recurringPlanValue || 0; });
-      var issues = t.callbackList.map(function (x) { return x.issue; });
+      var counts = {};
+      t.callbackList.forEach(function (x) { counts[x.issue] = (counts[x.issue] || 0) + 1; });
+      var topIssue = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0];
       var badReview = cur.reviewList.filter(function (r) { return r.techId === t.id && r.rating <= 3; })[0];
       var busiest = cur.techs.slice().sort(function (a, b) { return b.jobs - a.jobs; })[0];
       var monthlySave = (t.callbacks / 2) * c.callbackCostEstimate * 4.33;
@@ -351,7 +353,7 @@
         kind: "callbacks",
         value: planValue + monthlySave,
         title: "Ride along with " + t.name + " for half a day. " + t.callbacks + " of the team's " + cb.teamTotal + " callbacks were " + firstName(t.name) + "'s.",
-        detail: "Up from " + cb.monthAgo + " a month ago. Most common: “" + issues[0].toLowerCase() + ".”" + (badReview ? " One customer left a " + badReview.rating + "-star review about it." : "") +
+        detail: "Up from " + cb.monthAgo + " a month ago. Most common: “" + topIssue.toLowerCase() + ".”" + (badReview ? " One customer left a " + badReview.rating + "-star review about it." : "") +
           (busiest.id === t.id ? " " + firstName(t.name) + " also ran the most stops (" + t.jobs + "), so speed may be the issue." : ""),
         impact: "Cutting those in half saves about " + approx(monthlySave) + "/month" + (planValue ? " and protects " + approx(planValue) + "/yr in recurring plans." : "."),
       });
