@@ -36,6 +36,22 @@ The live demo is the Vercel project `monday-owner-report` at https://monday-owne
 
 The first deploy was uploaded directly because this GitHub repo isn't connected to Vercel yet. To get automatic deploys on every push, connect it once in Vercel: Project → Settings → Git → Connect Git Repository → pick this repo. Set the production branch to the branch you want to show.
 
+## Live version from Jobber (Nova Filters)
+
+The same `report.js` also renders a real account. `tools/build-jobber-data.js` turns raw Jobber exports into a `data.js` with the same shape as the demo, plus a few per-company settings:
+
+- `scorecard` picks the 8 tiles (for example "Jobs Booked" and "Systems Sold" instead of leads and reviews).
+- `features` turns off sections that have no data (Google reviews, add-on coaching, new-hire ramp plans).
+- `labels` / `notes` / `playbook` hold the company's own wording and steps.
+- Tech `group` ("Installer" vs "Service tech") makes techs compare against peers who do the same kind of work. `field: false` rows (office, no tech on record) stay out of the leaderboard and averages.
+- `quoteTracking: "viewed"` uses Jobber's "customer opened the quote" instead of a follow-up log.
+
+```
+node tools/build-jobber-data.js <rawDir> <outside-the-repo>/data.js --check
+```
+
+`--check` prints the reference week from Nova's weekly-totals playbook so the job-type rules can be compared against a known count. **The output contains real customer data: keep it out of git and deploy it only to a protected Vercel project.**
+
 ## Future phases (not built yet)
 
 - **Jobber API:** replace `DataSource.load()` in `report.js` with a server-side fetch that returns the same shape as `data.js`.
