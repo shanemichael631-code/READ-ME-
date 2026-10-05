@@ -425,7 +425,7 @@
     var cur = weeks[weeks.length - 1];
     var base = weeks.slice(-5, -1);
     var team = teamAverages(cur);
-    var avgClose = mean(base.map(function (w) { return w.closeRate; }));
+    var avgClose = mean(base.map(function (w) { return w.closeRate; }).filter(function (v) { return v !== null; }));
     var out = [];
 
     var q = find(leakModel.items, function (x) { return x.kind === "quotes"; });
@@ -830,6 +830,9 @@
       } else if (lead === "tech") {
         var t = leakOf("tech").flag.tech;
         s.push(t.name + " is running well behind the team, with " + t.jobs + " jobs against an average of " + Math.round(m.team.jobs) + ".");
+      } else if (m.leaks.items.length) {
+        var top = m.leaks.items[0];
+        s.push("The biggest item to look at is " + top.title.charAt(0).toLowerCase() + top.title.slice(1) + " (" + money(top.amount) + ").");
       } else {
         s.push("No big leaks this week.");
       }
