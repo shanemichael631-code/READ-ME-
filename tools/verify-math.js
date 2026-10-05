@@ -54,6 +54,46 @@ for (const c of data.companies) {
     else if (prev) check(`scorecard ${t.key} % change`, t.delta, (cur - prev) / prev);
   });
 
+  // Sales pipeline: every open quote lands in exactly one bucket
+  const open = c.quotes.filter((q) => q.status === "open");
+  check("pipeline bucket counts = open quotes", m.pipeline.buckets.reduce((s, b) => s + b.count, 0), open.length);
+  check("pipeline bucket $ = open quote $", m.pipeline.buckets.reduce((s, b) => s + b.amount, 0), open.reduce((s, q) => s + q.amount, 0));
+  check("pipeline open value", m.pipeline.openValue, open.reduce((s, q) => s + q.amount, 0));
+  const staleB = m.pipeline.buckets.find((b) => b.key === "stale");
+  const staleLeak = m.leaks.items.find((x) => x.kind === "quotes");
+  check("pipeline 'no follow-up' = quote leak", staleB.amount, staleLeak ? staleLeak.amount : 0);
+  check("funnel quotes sent = scorecard", m.pipeline.sent, m.cur.quotesSent);
+  check("funnel quotes won = scorecard", m.pipeline.won, m.cur.quotesWon);
+
+  // Invoice aging: buckets cover every open invoice once; 30+ buckets = Unpaid 30+
+  const openInv = c.invoices.filter((x) => x.issuedDate <= m.cur.end && (!x.paidDate || x.paidDate > m.cur.end));
+  check("aging counts = open invoices", m.aging.reduce((s, b) => s + b.count, 0), openInv.length);
+  check("aging $ = open invoice $", m.aging.reduce((s, b) => s + b.amount, 0), openInv.reduce((s, x) => s + x.amount, 0));
+  check("aging 30+ buckets = Unpaid 30+", m.aging.filter((b) => b.key !== "current").reduce((s, b) => s + b.amount, 0), m.cur.unpaid30);
+
+  // Tech history (tech sheet) adds up to company totals every week
+  const hist = c.techs.map((t) => Engine.techHistory(m.weeks, t.id));
+  m.weeks.forEach((w, i) => {
+    check(`${w.start} tech history revenue`, hist.reduce((s, h) => s + h[i].revenue, 0), w.revenue);
+    check(`${w.start} tech history jobs`, hist.reduce((s, h) => s + h[i].jobs, 0), w.jobs);
+    check(`${w.start} tech history callbacks`, hist.reduce((s, h) => s + h[i].callbacks, 0), w.callbacks);
+  });
+
+  // Actions: at most 3, sorted by value. Changes: at most 4, totals add up.
+  check("actions <= 3", Math.min(m.actions.length, 3), m.actions.length);
+  m.actions.slice(1).forEach((a, i) => check(`action ${i + 2} value <= action ${i + 1}`, Math.min(a.value, m.actions[i].value), a.value));
+  check("changes <= 4", Math.min(m.changes.items.length, 4), m.changes.items.length);
+  check("changes yearly total", m.changes.yearlyTotal, m.changes.items.reduce((s, x) => s + x.yearly, 0));
+  check("changes one-time total", m.changes.oneTimeTotal, m.changes.items.reduce((s, x) => s + x.oneTime, 0));
+  const fu = m.changes.items.find((x) => x.key === "followup");
+  const cr = m.scorecard.find((t) => t.key === "closeRate");
+  if (fu && cr.avg4 - cr.value > 0.03) {
+    const weeklySent = m.weeks.slice(-4).reduce((s, w) => s + w.quotesSentValue, 0) / 4;
+    check("follow-up yearly = weekly $ sent × drop × 52 × share", fu.yearly, weeklySent * (cr.avg4 - cr.value) * 52 * Engine.CONFIG.recoverShare, 1e-6);
+  }
+  const col = m.changes.items.find((x) => x.key === "collections");
+  if (col) check("collections one-time = unpaid30 × collect rate", col.oneTime, m.cur.unpaid30 * Engine.CONFIG.collectRate, 1e-6);
+
   // Money leaks total = sum of items
   check("leaks total = sum of items", m.leaks.total, m.leaks.items.reduce((s, x) => s + x.amount, 0));
   const stale = c.quotes.filter((q) => q.status === "open" && !q.lastFollowUpDate && (day(asOf) - day(q.sentDate)) / 864e5 > 5);
@@ -69,6 +109,10 @@ for (const c of data.companies) {
   console.log("  Summary: " + m.summary.join(" "));
   m.actions.forEach((a, i) => console.log(`  ${i + 1}. ${a.title}\n     ${a.detail}\n     ${a.impact}`));
   m.wins.forEach((w) => console.log(`  WIN ${w.title}: ${w.text}`));
+  console.log(`  Pipeline: ${m.pipeline.buckets.map((b) => `${b.label} ${b.count} / $${b.amount.toLocaleString()}`).join(" | ")}`);
+  console.log(`  Aging: ${m.aging.map((b) => `${b.label} $${b.amount.toLocaleString()}`).join(" | ")}`);
+  console.log(`  Changes (~$${Math.round(m.changes.yearlyTotal).toLocaleString()}/yr + $${Math.round(m.changes.oneTimeTotal).toLocaleString()} now):`);
+  m.changes.items.forEach((x) => console.log(`   - ${x.title}: ${x.impactText}`));
 }
 console.log(`\n${passes} checks passed, ${fails} failed.`);
 process.exit(fails ? 1 : 0);

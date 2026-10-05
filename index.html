@@ -4,27 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0e13" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Owner Report">
   <meta name="robots" content="noindex">
+  <meta name="description" content="Monday Owner Report demo: last week's numbers for a home-service business, in plain English. All data is fictional.">
   <title>Monday Owner Report</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f4fd8'/%3E%3Cpath d='M8 22V12l8 6 8-6v10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="topbar">
-    <div class="topbar-inner">
-      <label class="picker">
-        <span class="picker-label">Demo company</span>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <span class="brand"><span data-brand-logo></span><span class="brand-name" data-brand-name></span></span>
+      <label class="switcher">
+        <span class="sw-text">
+          <span class="sw-label">Demo company</span>
+          <span class="sw-value" id="company-label"></span>
+        </span>
+        <svg class="ico sw-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
         <select id="company" aria-label="Choose a demo company"></select>
       </label>
-      <button id="print" class="print-btn" type="button" aria-label="Save as PDF">PDF</button>
+      <button id="print" class="icon-btn" type="button" aria-label="Save as PDF" title="Save as PDF">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/></svg>
+      </button>
     </div>
-  </div>
+  </header>
 
-  <main id="report" class="report" aria-live="polite">
+  <main id="report" class="report">
     <noscript><p class="card">This report needs JavaScript turned on.</p></noscript>
   </main>
 

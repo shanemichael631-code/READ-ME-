@@ -1,6 +1,6 @@
 /* Offline cache so the demo still opens with no signal (e.g. in a customer's garage). */
-var CACHE = "owner-report-v1";
-var FILES = ["./", "index.html", "styles.css", "data.js", "report.js"];
+var CACHE = "owner-report-v2";
+var FILES = ["./", "index.html", "styles.css", "data.js", "report.js", "icon.svg"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
 });
