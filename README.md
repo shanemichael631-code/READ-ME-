@@ -30,6 +30,12 @@ Static site with no framework, no build step, and no external requests.
 - **Callback cost** = callbacks × the company's `callbackCostEstimate`.
 - **Tech flag** = under 75% of the team average for jobs or revenue. The leak amount is the gap to the average.
 
+## Deploying
+
+The live demo is the Vercel project `monday-owner-report` at https://monday-owner-report.vercel.app. It's a static site with no build step, so Vercel just serves the files.
+
+The first deploy was uploaded directly because this GitHub repo isn't connected to Vercel yet. To get automatic deploys on every push, connect it once in Vercel: Project → Settings → Git → Connect Git Repository → pick this repo. Set the production branch to the branch you want to show.
+
 ## Future phases (not built yet)
 
 - **Jobber API:** replace `DataSource.load()` in `report.js` with a server-side fetch that returns the same shape as `data.js`.
