@@ -174,7 +174,8 @@ visitsAll.rows.forEach((v) => { if (!visitsByJob.has(v.j)) visitsByJob.set(v.j, 
 function crewOf(jobId) {
   const vs = (visitsByJob.get(jobId) || []).filter((v) => v.d && ((v.un && v.un.length) || v.by)).sort((a, b) => (a.d < b.d ? 1 : -1));
   const fromVisit = vs.length ? (vs[0].un && vs[0].un.length ? vs[0].un : [vs[0].by]).map((n) => n.trim()) : [];
-  const listed = techsByJob.has(jobId) ? [...techsByJob.get(jobId)].sort() : [];
+  const all = techsByJob.has(jobId) ? [...techsByJob.get(jobId)].sort() : [];
+  const listed = all.filter((n) => FIELD.has(n)).length ? all.filter((n) => FIELD.has(n)) : all; // a field tech beats the owner/office
   if (listed.length) return listed.slice().sort((a, b) => (fromVisit.indexOf(b) >= 0) - (fromVisit.indexOf(a) >= 0));
   return fromVisit;
 }
@@ -184,7 +185,8 @@ function notesOf(jobId) {
 
 // Field techs = everyone we pulled a per-tech job list for (plus a deleted account that still
 // shows as "completed by" on old visits). Anyone else who closes visits is office staff.
-const FIELD = new Set(techRows.map((r) => r.tech.trim()));
+const NOT_FIELD = new Set(["Shane"]); // owner: assigned to counter pickups, not a route
+const FIELD = new Set(techRows.map((r) => r.tech.trim()).filter((n) => !NOT_FIELD.has(n)));
 FIELD.add("Deleted User");
 const techsByJob = new Map();
 techRows.forEach((r) => { const k = r.id; if (!techsByJob.has(k)) techsByJob.set(k, new Set()); techsByJob.get(k).add(r.tech.trim()); });
