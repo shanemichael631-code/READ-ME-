@@ -7,7 +7,8 @@
  * <rawDir> holds compact JSONL pulled from Jobber (one record per line):
  *   jobs-created-*.jsonl     jobs booked in the 8-week window   {id,n,t,c,d,s,ty,v,cid,cn}
  *   jobs-completed-*.jsonl   jobs completed from 5 weeks before  {same}
- *   visits-*.jsonl           visits: job id, assignees, leak notes {id,j,d,un,t,ins}
+ *   techjobs-*.jsonl         completed jobs per tech (search_jobs visitsAssignedToUserId) {id,n,tech}
+ *   visits-*.jsonl           visits: job id, assignees, completedBy, leak notes {id,j,d,by,un,t,ins}
  *   invoices-*.jsonl         invoices not paid same day + all unpaid {id,n,s,i,u,v,p,b,cid,cn}
  *   quotes.jsonl             quotes created in the window       {id,n,t,s,c,sent,view,appr,u,v,cid,cn}
  *
@@ -66,6 +67,7 @@ function loadAll(prefix) {
 const jobsAll = loadAll("jobs-");
 const visitsAll = loadAll("visits-");
 const invAll = loadAll("invoices-");
+const techRows = fs.readdirSync(RAW).filter((f) => f.startsWith("techjobs-") && f.endsWith(".jsonl")).flatMap((f) => readJsonl(path.join(RAW, f)));
 const quotesAll = fs.existsSync(path.join(RAW, "quotes.jsonl")) ? readJsonl(path.join(RAW, "quotes.jsonl")) : [];
 
 // ---------- names (privacy: first name + last initial) ----------
@@ -167,21 +169,26 @@ const jobById = new Map(jobs.map((j) => [j.id, j]));
 // ---------- visits -> who did each job ----------
 const visitsByJob = new Map();
 visitsAll.rows.forEach((v) => { if (!visitsByJob.has(v.j)) visitsByJob.set(v.j, []); visitsByJob.get(v.j).push(v); });
-// Who did the work: the assigned crew, or whoever marked the visit complete when nobody was assigned.
+// Who did the work: the tech(s) whose visits are on the job; when two are, the one the latest visit
+// lists first; with no assignee at all, whoever marked the visit complete.
 function crewOf(jobId) {
   const vs = (visitsByJob.get(jobId) || []).filter((v) => v.d && ((v.un && v.un.length) || v.by)).sort((a, b) => (a.d < b.d ? 1 : -1));
-  if (!vs.length) return [];
-  return vs[0].un && vs[0].un.length ? vs[0].un : [vs[0].by];
+  const fromVisit = vs.length ? (vs[0].un && vs[0].un.length ? vs[0].un : [vs[0].by]).map((n) => n.trim()) : [];
+  const listed = techsByJob.has(jobId) ? [...techsByJob.get(jobId)].sort() : [];
+  if (listed.length) return listed.slice().sort((a, b) => (fromVisit.indexOf(b) >= 0) - (fromVisit.indexOf(a) >= 0));
+  return fromVisit;
 }
 function notesOf(jobId) {
   return (visitsByJob.get(jobId) || []).map((v) => v.ins || "").filter(Boolean).join(" | ");
 }
 
-// Office staff: people who mark visits complete but are never assigned to field work.
-const assignedNames = new Set();
-visitsAll.rows.forEach((v) => { if (!/\bPUP\b/i.test(v.t || "")) (v.un || []).forEach((n) => assignedNames.add(n)); });
+// Field techs = everyone we pulled a per-tech job list for (plus a deleted account that still
+// shows as "completed by" on old visits). Anyone else who closes visits is office staff.
+const FIELD = new Set(techRows.map((r) => r.tech.trim()));
+FIELD.add("Deleted User");
+const techsByJob = new Map();
+techRows.forEach((r) => { const k = r.id; if (!techsByJob.has(k)) techsByJob.set(k, new Set()); techsByJob.get(k).add(r.tech.trim()); });
 const OFFICE = new Set();
-visitsAll.rows.forEach((v) => { if (v.by && v.by !== "Deleted User" && !assignedNames.has(v.by)) OFFICE.add(v.by); });
 function displayName(full) { return full === "Deleted User" ? "Former tech (account deleted)" : shortName(full); }
 
 // Completed work in the report (parts pickups are counter sales, not field jobs).
@@ -192,7 +199,7 @@ function techFor(job) {
   const crew = crewOf(job.id);
   const lead = crew[0];
   if (!lead) return "unassigned";
-  if (OFFICE.has(lead)) return "office";
+  if (!FIELD.has(lead)) { OFFICE.add(lead); return "office"; }
   const id = techKey(lead);
   if (!techMeta.has(id)) techMeta.set(id, { id, full: lead, name: displayName(lead), revenue8: 0, installRevenue8: 0, jobs8: 0 });
   return id;
@@ -323,7 +330,7 @@ const company = {
     checklistTitle: "Add a leak check to every filter change",
   },
   notes: {
-    revenue: "Revenue = the value of jobs completed that week in Jobber, before tax. Parts pickups at the counter are left out.",
+    revenue: "Revenue = the total of jobs completed that week in Jobber (job totals include sales tax). Parts pickups at the counter are left out.",
     booked: "Counted by the day the job was booked in Jobber, done or not. Test and internal jobs are left out.",
     systems: "Systems on new installs booked that week (whole-house filter, softener, RO, UV). Bypasses, faucets, salt and upgrades don't count.",
     closeRate: "Quotes come from Jobber. Won = approved or converted to a job; lost = archived.",
@@ -368,7 +375,7 @@ fs.writeFileSync(OUT, body);
 
 // ---------- report to the console ----------
 const W = (i) => weeks[i];
-console.log("files:", jobsAll.files.length, "job files,", visitsAll.files.length, "visit files,", invAll.files.length, "invoice files");
+console.log("files:", jobsAll.files.length, "job files,", visitsAll.files.length, "visit files,", invAll.files.length, "invoice files,", techRows.length, "tech-job rows for", FIELD.size - 1, "techs");
 console.log("jobs:", jobs.length, "real,", dropped.length, "dropped as test/internal; completed in window:", inWindowDone.length, "; techs:", techs.map((t) => t.name + " (" + t.role + ")").join(", "));
 console.log("unassigned completed jobs in window:", inWindowDone.filter((j) => j.techId === "unassigned").length, "; office:", inWindowDone.filter((j) => j.techId === "office").length, "; office staff:", [...OFFICE].join(", "));
 console.log("leak calls in window:", leakJobs.length, "; traced callbacks:", callbacks.length, "; avg FC ticket:", avgFc);
