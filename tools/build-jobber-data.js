@@ -294,18 +294,23 @@ const quotes = quotesAll.map((q) => {
 }).filter(Boolean).filter((q) => q.sentDate <= windowEnd).sort((a, b) => (a.sentDate < b.sentDate ? -1 : 1));
 
 // ---------- invoices (only ones that could be open at a week's end) ----------
+// Balances more than a year old are old-system leftovers or write-offs, not this week's calls:
+// they stay out of the weekly numbers and are listed once in the tile's note instead.
+const STALE_DAYS = 365;
+const staleCutoff = addDays(windowEnd, -STALE_DAYS);
+const staleInvoices = [];
 const invoices = invAll.rows.map((x) => {
   if (["bad_debt", "voided", "draft"].includes(x.s)) return null;
   const issued = etDate(x.i);
   if (!issued || issued > windowEnd) return null;
   const paid = x.s === "paid" ? etDate(x.paidAt || x.u) : null; // paidAt when verified, else last update
   if (paid && paid <= issued) return null; // paid the day it was issued: never open at a week's end
-  return {
-    id: "INV-" + x.n, customer: shortName(x.cn), description: "Invoice #" + x.n,
-    amount: Math.round(x.s === "paid" ? Number(x.v) : Number(x.b) > 0 ? Number(x.b) : Number(x.v)),
-    issuedDate: issued, paidDate: paid,
-  };
+  const amount = Math.round(x.s === "paid" ? Number(x.v) : Number(x.b) > 0 ? Number(x.b) : Number(x.v));
+  if (amount <= 0) return null; // credits
+  if (!paid && issued < staleCutoff) { staleInvoices.push({ n: x.n, issued, amount }); return null; }
+  return { id: "INV-" + x.n, customer: shortName(x.cn), description: "Invoice #" + x.n, amount, issuedDate: issued, paidDate: paid };
 }).filter(Boolean).sort((a, b) => (a.issuedDate < b.issuedDate ? -1 : 1));
+const staleTotal = staleInvoices.reduce((s, x) => s + x.amount, 0);
 
 // ---------- callback cost: the average filter-change ticket (the paid stop a free trip replaces) ----------
 const fcDone = inWindowDone.filter((j) => j.bucket === "Filter change" && j.total > 0);
@@ -325,7 +330,7 @@ const company = {
   features: { reviews: false, addOnCoaching: false, rampPlans: false },
   labels: {
     tile_jobs: "Jobs Done",
-    addOns: "Installs", addOn: "install or upgrade", addOnRate: "of jobs were installs or upgrades",
+    addOns: "Installs", addOn: "install or upgrade", addOnPlural: "installs or upgrades", addOnRate: "of jobs were installs or upgrades",
     redoVisit: "free return visit", callback: "callback",
     callbackLeakDetail: "{n} within " + CALLBACK_WINDOW_DAYS + " days of our own visit × ~{cost} each. Each free trip back takes a paid route slot.",
     callbackCostNote: "A callback here is a leak call booked within " + CALLBACK_WINDOW_DAYS + " days of a completed Nova visit at the same customer, credited to the tech who did that visit. Each free trip back is valued at {cost}, your average filter-change ticket: the paid stop that slot could have been.",
@@ -336,6 +341,9 @@ const company = {
     booked: "Counted by the day the job was booked in Jobber, done or not. Test and internal jobs are left out.",
     systems: "Systems on new installs booked that week (whole-house filter, softener, RO, UV). Bypasses, faucets, salt and upgrades don't count.",
     closeRate: "Quotes come from Jobber. Won = approved or converted to a job; lost = archived.",
+    unpaid30: "Open balances on Jobber invoices 30 to 365 days old." + (staleInvoices.length
+      ? " Left out: " + staleInvoices.length + " balances more than a year old (" + "$" + staleTotal.toLocaleString("en-US") + ", oldest from " + staleInvoices.map((x) => x.issued).sort()[0].slice(0, 4) + "). Write them off or close them in Jobber so they stop showing as owed."
+      : ""),
   },
   playbook: {
     checklistSteps: [
@@ -347,7 +355,7 @@ const company = {
     coachSteps: [
       "Pull {first}'s callback list and look for a pattern: canisters, O-rings, or one kind of system.",
       "Ride a full route with {first} and watch every closeout: O-rings, tightening, and the 2-minute dry check.",
-      "Cap {first}'s daily stops at the team average until the callbacks drop.",
+      "Cap {first}'s daily stops at the {peer} until the callbacks drop.",
       "Call every callback customer personally within 24 hours.",
     ],
   },
@@ -382,7 +390,7 @@ console.log("files:", jobsAll.files.length, "job files,", visitsAll.files.length
 console.log("jobs:", jobs.length, "real,", dropped.length, "dropped as test/internal; completed in window:", inWindowDone.length, "; techs:", techs.map((t) => t.name + " (" + t.role + ")").join(", "));
 console.log("unassigned completed jobs in window:", inWindowDone.filter((j) => j.techId === "unassigned").length, "; office:", inWindowDone.filter((j) => j.techId === "office").length, "; office staff:", [...OFFICE].join(", "));
 console.log("leak calls in window:", leakJobs.length, "; traced callbacks:", callbacks.length, "; avg FC ticket:", avgFc);
-console.log("quotes:", quotes.length, "(open", quotes.filter((q) => q.status === "open").length + ")", "; invoices kept:", invoices.length, "(unpaid now", invoices.filter((x) => !x.paidDate).length + ")");
+console.log("quotes:", quotes.length, "(open", quotes.filter((q) => q.status === "open").length + ")", "; invoices kept:", invoices.length, "(unpaid now", invoices.filter((x) => !x.paidDate).length + ")", "; left out as over a year old:", staleInvoices.length, "$" + staleTotal);
 weeks.forEach((w) => console.log(" ", w.weekStart, "rev", w.revenue, "jobs", w.jobsCompleted, "booked", w.metrics.booked, "systems", w.metrics.systems, "leaks", w.metrics.leakCalls, "FCs", w.metrics.fcsBooked, JSON.stringify(w.breakdown.booked)));
 if (CHECK) {
   // Reference week from the weekly-totals playbook: Sep 21-27, 2026.

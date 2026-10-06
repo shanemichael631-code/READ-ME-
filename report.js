@@ -70,6 +70,9 @@
   function sum(arr, fn) { return arr.reduce(function (s, x) { return s + (fn ? fn(x) : x); }, 0); }
   function mean(arr) { return arr.length ? sum(arr) / arr.length : 0; }
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many || one + "s"); }
+  function withArticle(phrase) { return (/^[aeiou]/i.test(phrase) ? "an " : "a ") + phrase; }
+  // "up from 2 a month ago" / "same as a month ago" / "down from 4 a month ago"
+  function vsMonthAgo(now, then) { return now > then ? "up from " + then + " a month ago" : now < then ? "down from " + then + " a month ago" : "same as a month ago"; }
   function firstName(name) { return name.split(" ")[0]; }
   function initials(name) {
     return name.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join("").toUpperCase();
@@ -550,7 +553,7 @@
         kind: "callbacks",
         value: planValue + yearlySave / 12,
         title: "Ride along with " + t.name + " for half a day. " + (t.callbacks === cb.teamTotal ? "All " + t.callbacks : t.callbacks + " of the team's " + cb.teamTotal) + " callbacks were " + firstName(t.name) + "'s.",
-        detail: "Up from " + cb.monthAgo + " a month ago. Most common: “" + topIssue(t.callbackList).toLowerCase() + ".”" + (badReview ? " One customer left a " + badReview.rating + "-star review about it." : "") +
+        detail: cap(vsMonthAgo(t.callbacks, cb.monthAgo)) + ". Most common: “" + topIssue(t.callbackList).toLowerCase() + ".”" + (badReview ? " One customer left a " + badReview.rating + "-star review about it." : "") +
           (busiest.id === t.id ? " " + firstName(t.name) + " also ran the most stops (" + t.jobs + "), so speed may be the issue." : ""),
         impact: "Cutting those in half saves about " + approx(yearlySave) + "/yr" + (planValue ? " and protects " + approx(planValue) + "/yr in recurring plans." : "."),
         open: "tech:" + t.id,
@@ -564,7 +567,7 @@
         kind: "tech",
         value: l.amount / 2,
         title: "Pair " + t.name + " with " + mentor.name + " on 2 calls this week.",
-        detail: firstName(t.name) + " did " + t.jobs + " jobs (" + money(t.revenue) + ") vs. a " + peerLabel(t) + " of " + Math.round(peer.jobs) + " (" + money(peer.revenue) + ").",
+        detail: firstName(t.name) + " did " + t.jobs + " jobs (" + money(t.revenue) + ") vs. " + withArticle(peerLabel(t)) + " of " + Math.round(peer.jobs) + " (" + money(peer.revenue) + ").",
         impact: "Closing half the gap is worth about " + approx(l.amount / 2) + "/week.",
         open: "tech:" + t.id,
       });
@@ -612,7 +615,7 @@
     out.push({
       icon: "🏆",
       title: topTech.name + " led the team",
-      text: money(topTech.revenue) + " on " + topTech.jobs + " jobs" + (topTech.addOns ? ", plus " + plural(topTech.addOns, termOf(c, "addOn", "add-on")) : "") + ".",
+      text: money(topTech.revenue) + " on " + topTech.jobs + " jobs" + (topTech.addOns ? ", plus " + plural(topTech.addOns, termOf(c, "addOn", "add-on"), c.labels && c.labels.addOnPlural) : "") + ".",
       open: "tech:" + topTech.id,
     });
 
@@ -721,11 +724,16 @@
     if (cbt || weeklyCb >= 2) {
       var plans = cbt ? sum(cbt.tech.callbackList, function (x) { return x.recurringPlanValue || 0; }) : 0;
       var save = cbt ? techCallbackSavings(c, weeks, cbt.tech.id) : yearlyCbCost * CONFIG.checklistCut;
+      // Capping stops only makes sense when the tech runs more of them than their peers.
+      var cbPeer = cbt ? peerAvg(team, cbt.tech) || team : null;
+      var cbLabel = cbt ? (peerAvg(team, cbt.tech) ? peerLabel(cbt.tech) : "team average") : "";
+      var heavy = cbt && cbt.tech.jobs > cbPeer.jobs;
       out.push({
         key: "callbacks",
-        title: cbt ? "Coach " + cbt.tech.name + " and cap daily stops" : termOf(c, "checklistTitle", "Add a 2-minute closeout checklist to every job"),
+        title: cbt ? "Coach " + cbt.tech.name + (heavy ? " and cap daily stops" : " on callbacks") : termOf(c, "checklistTitle", "Add a 2-minute closeout checklist to every job"),
         evidence: cbt
-          ? firstName(cbt.tech.name) + " had " + (cbt.tech.callbacks === cbt.teamTotal ? "all " + cbt.tech.callbacks : cbt.tech.callbacks + " of " + cbt.teamTotal) + " callbacks last week (up from " + cbt.monthAgo + " a month ago) while running " + cbt.tech.jobs + " stops vs. a team average of " + Math.round(team.jobs) + "."
+          ? firstName(cbt.tech.name) + " had " + (cbt.tech.callbacks === cbt.teamTotal ? "all " + cbt.tech.callbacks : cbt.tech.callbacks + " of " + cbt.teamTotal) + " callbacks last week (" + vsMonthAgo(cbt.tech.callbacks, cbt.monthAgo) + ")" +
+            (heavy ? " while running " + cbt.tech.jobs + " stops vs. " + withArticle(cbLabel) + " of " + Math.round(cbPeer.jobs) + "." : " on " + cbt.tech.jobs + " stops vs. " + withArticle(cbLabel) + " of " + Math.round(cbPeer.jobs) + ", so it isn't from rushing.")
           : "You averaged " + weeklyCb.toFixed(1) + " callbacks a week over the 4 weeks before last, about " + approx(yearlyCbCost) + "/yr in unpaid " + termOf(c, "redoVisit", "redo visit") + "s.",
         steps: (cbt ? (c.playbook && c.playbook.coachSteps) || [
           "Visit the callback homes and log the real cause: missed area, wrong ID, or product.",
@@ -736,7 +744,8 @@
           "Add a required photo + checklist step before a job can be closed out.",
           "Tag every redo visit as a callback so the report can track it by tech.",
           "Review the week's callbacks at the Monday huddle, 5 minutes, no blame.",
-        ]).map(function (x) { return fill(x, { first: cbt ? firstName(cbt.tech.name) : "" }); }),
+        ]).filter(function (x) { return heavy || !/^Cap /.test(x); })
+          .map(function (x) { return fill(x, { first: cbt ? firstName(cbt.tech.name) : "", peer: cbLabel }); }),
         effort: cbt ? "Medium" : "Low",
         setup: cbt ? "Half a day" : "1 hour",
         yearly: save,
@@ -753,7 +762,7 @@
       out.push({
         key: "ramp",
         title: "Give " + f.tech.name + " a 90-day ramp plan",
-        evidence: firstName(f.tech.name) + " (" + f.tech.role.replace(/\s*\(.*\)/, "").toLowerCase() + ") did " + money(f.tech.revenue) + " last week vs. a " + peerLabel(f.tech) + " of " + money(f.peer.revenue) + ".",
+        evidence: firstName(f.tech.name) + " (" + f.tech.role.replace(/\s*\(.*\)/, "").toLowerCase() + ") did " + money(f.tech.revenue) + " last week vs. " + withArticle(peerLabel(f.tech)) + " of " + money(f.peer.revenue) + ".",
         steps: [
           "Weeks 1–4: " + firstName(f.tech.name) + " rides with " + mentor.name + " and leads every other call.",
           "Weeks 5–8: solo on simple calls; " + firstName(mentor.name) + " reviews the tickets daily.",
@@ -914,7 +923,7 @@
         s.push("You're doing the work, then waiting on the money: " + oldest.customer + " is at " + oldest.daysOutstanding + " days.");
       } else if (lead === "callbacks") {
         var cb = callbackTech(m.weeks, m.team);
-        s.push("The one thing to watch is " + cb.tech.name + ": " + (cb.tech.callbacks === cb.teamTotal ? "all " + cb.tech.callbacks : cb.tech.callbacks + " of the team's " + cb.teamTotal) + " callbacks came from " + firstName(cb.tech.name) + "'s jobs, up from " + cb.monthAgo + " a month ago.");
+        s.push("The one thing to watch is " + cb.tech.name + ": " + (cb.tech.callbacks === cb.teamTotal ? "all " + cb.tech.callbacks : cb.tech.callbacks + " of the team's " + cb.teamTotal) + " callbacks came from " + firstName(cb.tech.name) + "'s jobs, " + vsMonthAgo(cb.tech.callbacks, cb.monthAgo) + ".");
         s.push("Callbacks cost twice: a free truck roll now and a cancelled plan later.");
       } else if (lead === "tech") {
         var lf = leakOf("tech").flag, t = lf.tech;
@@ -1120,7 +1129,7 @@
       '<div class="co-row"><span class="co-avatar" style="--co:' + color + '">' + esc(monogram(c.name)) + "</span>" +
       '<div><p class="eyebrow">Monday Owner Report ' + (m.live ? '<span class="badge live">LIVE DATA</span>' : '<span class="badge">DEMO</span>') + "</p>" +
       "<h1>" + esc(c.name) + "</h1>" +
-      '<p class="co-meta"><span>' + esc(c.trade) + "</span> <span>· " + esc(c.serviceArea) + "</span> <span>· " + plural(fieldTechs(c.techs).length, "tech") + "</span></p></div></div>" +
+      '<p class="co-meta"><span>' + esc(c.trade) + "</span> <span>· " + esc(c.serviceArea) + "</span> <span>· " + plural(currentTeam(m).length, "tech") + "</span></p></div></div>" +
       '<div class="head-meta"><span class="pill-meta">' + icon("clock") + "Mon " + shortDate(m.cur.start) + " – Sun " + shortDate(m.cur.end) + ", " + d(m.cur.end).getUTCFullYear() + "</span>" +
       '<span class="pill-meta"><span class="dot" aria-hidden="true"></span>Delivered Monday, ' + shortDate(m.asOf) + " · " + CONFIG.deliveryTime + "</span></div>" +
       "</header>"
@@ -1216,8 +1225,16 @@
       f + rateLine + '<h3 class="sub-h">Open quotes · ' + money(p.openValue) + "</h3>" + b);
   }
 
+  // Field techs still on the team: a tech with no jobs in the last 5 weeks has left.
+  function currentTeam(m) {
+    var recent = m.weeks.slice(-5);
+    return fieldTechs(m.cur.techs).filter(function (t) {
+      return recent.some(function (w) { var x = find(w.techs, function (y) { return y.id === t.id; }); return x && x.jobs; });
+    });
+  }
+
   function renderLeaderboard(m) {
-    var techs = fieldTechs(m.cur.techs).sort(byDesc(function (t) { return t.revenue; }));
+    var techs = currentTeam(m).sort(byDesc(function (t) { return t.revenue; }));
     var maxRev = techs[0].revenue || 1;
     var rows = techs.map(function (t, i) {
       var flagged = isCallbackFlag(t, m.team);
