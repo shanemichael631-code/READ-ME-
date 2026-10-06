@@ -897,8 +897,15 @@
 
       if (lead === "quotes") {
         var q = leakOf("quotes");
-        s.push("The leak is follow-up: " + plural(q.list.length, "quote") + " worth " + money(q.amount) + (q.list.length === 1 ? " is" : " are") + " sitting with no follow-up call.");
-        if (cr && cr.vsAvg !== null && cr.vsAvg < -0.03) s.push("That's likely part of why your close rate slid to " + pct(cr.value) + " from a " + pct(cr.avg4) + " average: quotes go out, but nobody chases them.");
+        if (viewedMode(m.company)) {
+          var unopened = q.list.filter(function (x) { return !x.viewedDate; }).length;
+          s.push("The leak is open quotes: " + plural(q.list.length, "quote") + " worth " + money(q.amount) + (q.list.length === 1 ? " is" : " are") + " more than " + CONFIG.staleQuoteDays + " days old with no decision" +
+            (unopened ? ", and " + (unopened === q.list.length ? (unopened === 1 ? "the customer hasn't opened it" : "none have been opened") : unopened + " were never opened") : "") + ".");
+          if (cr && cr.vsAvg !== null && cr.vsAvg < -0.03) s.push("Close rate slid to " + pct(cr.value) + " from a " + pct(cr.avg4) + " average while those sit.");
+        } else {
+          s.push("The leak is follow-up: " + plural(q.list.length, "quote") + " worth " + money(q.amount) + (q.list.length === 1 ? " is" : " are") + " sitting with no follow-up call.");
+          if (cr && cr.vsAvg !== null && cr.vsAvg < -0.03) s.push("That's likely part of why your close rate slid to " + pct(cr.value) + " from a " + pct(cr.avg4) + " average: quotes go out, but nobody chases them.");
+        }
       } else if (lead === "unpaid") {
         var u = leakOf("unpaid");
         var oldest = u.list[0];

@@ -100,8 +100,8 @@ function isInstall(T) {
 const SERVICE = /SOFTY SERVICE|CHECK SOFTY|CHECK SYSTEM|CHECK WHF|CHECK GAUGE|INSPECT|GAUGE|BOTTLE SWAP|\bPR\b|PRESSURE REGULATOR|WHF BYPASS|CONSULT|RO SERVICE|WHF SERVICE|PR SERVICE|SALT D\/O|REINSTALL|UNINSTALL|REPROGRAM|REPLACE|NO WATER|PRESSURE PROBLEM/;
 function bucketOf(title) {
   const T = (title || "").toUpperCase().replace(/\s+/g, " ").trim();
+  if (/LEAK|CANITER|SALT BUCKET OVERFLOW/.test(T)) return "Leak"; // incl. "PUP CANISTER LEAK" (office handles it)
   if (/\bF?PUP\b/.test(T)) return "Parts pickup"; // PUP / FPUP = customer parts pickup
-  if (/LEAK|CANITER|SALT BUCKET OVERFLOW/.test(T)) return "Leak";
   if (/UPGRADE/.test(T)) return "Upgrade";
   if (isInstall(T)) return "New install";
   if (/^(CTS )?FC\b|^ROCH\b/.test(T)) return "Filter change"; // FC, FC OL#, CTS FC, ROCH FC, FC SALT D/O
@@ -364,12 +364,13 @@ const data = {
 
 // ---------- output ----------
 function line(o) { return JSON.stringify(o); }
+const LISTS = ["techs", "weeks", "quotes", "invoices", "callbacks", "reviews"]; // one record per line
 const body =
   "/* Monday Owner Report data for Nova Filters, built from Jobber by tools/build-jobber-data.js.\n" +
   " * PRIVATE: real customer data. Do not commit or publish publicly. */\n" +
   "window.REPORT_DATA = {\n meta: " + line(data.meta) + ",\n companies: [{\n" +
-  Object.keys(company).filter((k) => !Array.isArray(company[k])).map((k) => "  " + k + ": " + line(company[k])).join(",\n") + ",\n" +
-  ["techs", "weeks", "quotes", "invoices", "callbacks", "reviews"].map((k) => "  " + k + ": [" + (company[k].length ? "\n" + company[k].map((x) => "   " + line(x)).join(",\n") + "\n  " : "") + "]").join(",\n") +
+  Object.keys(company).filter((k) => !LISTS.includes(k)).map((k) => "  " + k + ": " + line(company[k])).join(",\n") + ",\n" +
+  LISTS.map((k) => "  " + k + ": [" + (company[k].length ? "\n" + company[k].map((x) => "   " + line(x)).join(",\n") + "\n  " : "") + "]").join(",\n") +
   "\n }],\n};\n";
 fs.writeFileSync(OUT, body);
 
