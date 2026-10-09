@@ -15,6 +15,13 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Loading / error card, styled here so it shows even if styles.css doesn't load. */
+    .boot { text-align: center; padding: 28px 20px; max-width: 520px; margin: 24px auto; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .boot-msg { font-weight: 650; font-size: 15px; margin: 0; }
+    .boot-btn { margin-top: 12px; font: inherit; font-weight: 700; padding: 10px 22px; border-radius: 999px; border: 0; background: #3b5bdb; color: #fff; cursor: pointer; }
+    .boot-hint { margin: 10px 0 0; font-size: 12.5px; opacity: .7; }
+  </style>
 </head>
 <body>
   <header class="appbar">
@@ -35,13 +42,42 @@
   </header>
 
   <main id="report" class="report">
+    <div class="card boot" id="boot" role="status" aria-live="polite">
+      <p class="boot-msg">Loading your report…</p>
+    </div>
     <noscript><p class="card">This report needs JavaScript turned on.</p></noscript>
   </main>
 
+  <script>
+    // If the report can't start (a file didn't load, or the sign-in expired), say so instead of
+    // leaving a blank page. report.js replaces #boot as soon as it renders.
+    (function () {
+      function stuck(msg) {
+        var b = document.getElementById("boot");
+        if (!b) return;
+        b.innerHTML = '<p class="boot-msg">' + msg + '</p><button type="button" class="boot-btn" onclick="location.reload()">Reload</button>' +
+          '<p class="boot-hint">If this keeps happening on a private report, open the link in Safari or Chrome (not inside another app) and sign in when asked.</p>';
+      }
+      window.__bootStuck = stuck;
+      setTimeout(function () { stuck("Still loading. Your connection may be slow."); }, 10000);
+    })();
+  </script>
   <script src="data.js"></script>
   <script src="report.js"></script>
   <script>
-    if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");
+    window.addEventListener("load", function () {
+      if (document.getElementById("boot")) window.__bootStuck("The report didn't load.");
+    });
+    // Offline copy for the public demo only. A private report always loads fresh, so a cached copy
+    // can never hide an expired sign-in or show last week's numbers.
+    (function () {
+      var demo = !!(window.REPORT_DATA && window.REPORT_DATA.meta && window.REPORT_DATA.meta.source === "demo");
+      if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+      if (demo) { if (location.protocol === "https:") navigator.serviceWorker.register("sw.js"); return; }
+      function quiet() {}
+      navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }, quiet);
+      if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }, quiet);
+    })();
   </script>
 </body>
 </html>

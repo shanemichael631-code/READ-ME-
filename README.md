@@ -10,7 +10,8 @@ Static site with no framework, no build step, and no external requests.
 | `styles.css` | Mobile-first styles, light and dark mode, print-to-PDF layout |
 | `data.js` | Raw demo data only (3 companies × 8 weeks), shaped like Jobber records |
 | `report.js` | Engine (math), Narrator (summary text), View (HTML + SVG chart) |
-| `sw.js` | Offline cache so the page opens with no signal after the first visit |
+| `sw.js` | Offline cache so the demo opens with no signal after the first visit |
+| `sw-retire.js` | Deployed as `sw.js` on live reports: removes any old offline cache and itself |
 | `tools/generate-demo-data.js` | Regenerates `data.js` (`node tools/generate-demo-data.js > data.js`) |
 | `tools/verify-math.js` | Recomputes every number independently and checks it (`node tools/verify-math.js`) |
 
@@ -50,7 +51,7 @@ The same `report.js` also renders a real account. `tools/build-jobber-data.js` t
 node tools/build-jobber-data.js <rawDir> <outside-the-repo>/data.js --check
 ```
 
-`--check` prints the reference week from Nova's weekly-totals playbook so the job-type rules can be compared against a known count. **The output contains real customer data: keep it out of git and deploy it only to a protected Vercel project.** Nova's copy lives in the Vercel project `nova-owner-report`, which has Vercel Authentication on every URL (only signed-in team members can open it).
+`--check` prints the reference week from Nova's weekly-totals playbook so the job-type rules can be compared against a known count. **The output contains real customer data: keep it out of git and deploy it only to a protected Vercel project.** Nova's copy lives in the Vercel project `nova-owner-report`, which has Vercel Authentication on every URL (only signed-in team members can open it). Deploy `sw-retire.js` there **as `sw.js`**: a private report never keeps an offline copy, because a cached copy hides an expired sign-in and keeps showing old numbers. `index.html` only registers the offline cache for the demo, and shows a loading / "didn't load" card instead of a blank page.
 
 Data rules worth knowing: revenue is job totals (they include sales tax), parts pickups are left out, invoice balances more than a year old and credits stay out of the weekly unpaid numbers (the Unpaid tile's note lists them), and Jobber's "paid" date is approximated by the invoice's last update.
 
