@@ -217,6 +217,8 @@ button.is-link:active { transform: scale(.985); }
   display: flex; flex-direction: column; gap: 3px; min-width: 0;
 }
 .tile:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--card); box-shadow: var(--shadow); }
+.tile.static:hover { border-color: var(--line-2); background: var(--soft); box-shadow: none; }
+.wtd-span { font-size: 13px; color: var(--muted); font-weight: 600; margin: -4px 0 10px; }
 .tile-label { font-size: 12.5px; color: var(--muted); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-value { font-family: var(--font-display); font-size: 23.5px; font-weight: 780; letter-spacing: -.02em; line-height: 1.15; display: flex; align-items: baseline; gap: 5px; flex-wrap: nowrap; min-width: 0; }
 .tile-sub { font-size: 12.5px; font-weight: 650; color: var(--muted); letter-spacing: 0; }
@@ -472,6 +474,7 @@ dialog.sheet::backdrop { background: rgba(8, 12, 20, .48); -webkit-backdrop-filt
 .stat-grid.three .stat-v { font-size: 17px; }
 @media (min-width: 480px) { .stat-grid { grid-template-columns: repeat(3, 1fr); } }
 .stat-grid.four { grid-template-columns: 1fr 1fr; }
+.stat-grid.two { grid-template-columns: 1fr 1fr; }
 @media (min-width: 600px) { .stat-grid.four { grid-template-columns: repeat(4, 1fr); } }
 
 .tech-hero { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }

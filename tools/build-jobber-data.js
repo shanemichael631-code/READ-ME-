@@ -2,7 +2,11 @@
 /*
  * build-jobber-data.js — turn raw Jobber exports into the report's data shape (same as data.js).
  *
- *   node tools/build-jobber-data.js <rawDir> <out.js> [--asof YYYY-MM-DD] [--check]
+ *   node tools/build-jobber-data.js <rawDir> <out.js> [--through YYYY-MM-DD] [--asof YYYY-MM-DD] [--check]
+ *
+ * --through is the last day of data (usually yesterday). The 8 report weeks end on the last full
+ * Mon–Sun week on or before it, and the days after that week become "this week so far".
+ * --asof (a Monday) overrides the week anchor directly.
  *
  * <rawDir> holds compact JSONL pulled from Jobber (one record per line):
  *   jobs-created-*.jsonl     jobs booked in the 8-week window   {id,n,t,c,d,s,ty,v,cid,cn}
@@ -22,9 +26,10 @@ const path = require("path");
 const args = process.argv.slice(2);
 const RAW = args[0];
 const OUT = args[1];
-const ASOF = (args.indexOf("--asof") >= 0 && args[args.indexOf("--asof") + 1]) || "2026-10-05";
+function argOf(name) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; }
+const THROUGH = argOf("--through");
 const CHECK = args.includes("--check");
-if (!RAW || !OUT) { console.error("usage: build-jobber-data.js <rawDir> <out.js> [--asof YYYY-MM-DD] [--check]"); process.exit(1); }
+if (!RAW || !OUT) { console.error("usage: build-jobber-data.js <rawDir> <out.js> [--through YYYY-MM-DD] [--asof YYYY-MM-DD] [--check]"); process.exit(1); }
 
 const WEEKS = 8;
 const CALLBACK_WINDOW_DAYS = 30;
@@ -50,6 +55,11 @@ function etDate(ts) { // ISO timestamp (any offset) -> "YYYY-MM-DD" in Eastern t
 function addDays(s, n) { return new Date(Date.parse(s + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10); }
 function daysBetween(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 864e5); }
 function dow(s) { return (new Date(s + "T00:00:00Z").getUTCDay() + 6) % 7; } // 0 = Monday
+
+// Week anchor: the Monday after the last full Mon–Sun week of data.
+const ASOF = argOf("--asof") || (THROUGH ? addDays(addDays(THROUGH, 1), -dow(addDays(THROUGH, 1))) : "2026-10-05");
+const TODAY = THROUGH ? addDays(THROUGH, 1) : ASOF; // the morning the report is read
+const DATA_END = THROUGH && THROUGH >= ASOF ? THROUGH : addDays(ASOF, -1); // last day of data
 
 // ---------- load ----------
 function readJsonl(file) {
@@ -280,6 +290,45 @@ const weeks = weekStarts.map((ws, i) => {
   };
 });
 
+// ---------- this week so far (the days after the last full week) ----------
+// Compared with the same weekdays of earlier weeks, so a 4-day week is never measured against a 7-day one.
+function spanStats(from, to) {
+  const inSpan = (d) => !!d && d >= from && d <= to;
+  const wDone = done.filter((j) => inSpan(j.completed));
+  const booked = jobs.filter((j) => inSpan(j.created));
+  const systems = booked.filter((j) => j.bucket === "New install")
+    .reduce((n, j) => { const x = systemsOf(j.title); return n + x.WHF + x.Softener + x.RO + x.UV; }, 0);
+  return {
+    revenue: wDone.reduce((n, j) => n + j.total, 0),
+    jobs: wDone.length,
+    booked: booked.length,
+    systems,
+    leakCalls: booked.filter((j) => j.bucket === "Leak").length,
+    fcsBooked: booked.filter((j) => j.bucket === "Filter change").length + booked.filter((j) => bundledFC(j.title, j.bucket)).length,
+  };
+}
+let weekToDate = null;
+if (DATA_END >= ASOF) {
+  const days = daysBetween(ASOF, DATA_END) + 1;
+  const back = (k) => spanStats(addDays(ASOF, -7 * k), addDays(DATA_END, -7 * k));
+  const prior = [1, 2, 3, 4].map(back);
+  const avg4 = {};
+  Object.keys(prior[0]).forEach((k) => { avg4[k] = Math.round((prior.reduce((n, x) => n + x[k], 0) / prior.length) * 10) / 10; });
+  const wDone = done.filter((j) => j.completed >= ASOF && j.completed <= DATA_END);
+  const byTech = new Map();
+  wDone.forEach((j) => {
+    const t = byTech.get(j.techId) || { techId: j.techId, jobs: 0, revenue: 0 };
+    t.jobs += 1; t.revenue += j.total;
+    byTech.set(j.techId, t);
+  });
+  weekToDate = {
+    start: ASOF, through: DATA_END, days,
+    now: spanStats(ASOF, DATA_END), lastWeek: prior[0], avg4,
+    techs: [...byTech.values()].sort((a, b) => b.revenue - a.revenue),
+    daily: Array.from({ length: days }, (_, i) => wDone.filter((j) => j.completed === addDays(ASOF, i)).reduce((n, j) => n + j.total, 0)),
+  };
+}
+
 // ---------- quotes ----------
 const quotes = quotesAll.map((q) => {
   const st = q.s;
@@ -291,7 +340,7 @@ const quotes = quotesAll.map((q) => {
     decidedDate: status === "won" ? etDate(q.appr || q.u) : status === "lost" ? etDate(q.u) : null,
     viewedDate: etDate(q.view),
   };
-}).filter(Boolean).filter((q) => q.sentDate <= windowEnd).sort((a, b) => (a.sentDate < b.sentDate ? -1 : 1));
+}).filter(Boolean).filter((q) => q.sentDate <= DATA_END).sort((a, b) => (a.sentDate < b.sentDate ? -1 : 1));
 
 // ---------- invoices (only ones that could be open at a week's end) ----------
 // Balances more than a year old are old-system leftovers or write-offs, not this week's calls:
@@ -302,7 +351,7 @@ const staleInvoices = [];
 const invoices = invAll.rows.map((x) => {
   if (["bad_debt", "voided", "draft"].includes(x.s)) return null;
   const issued = etDate(x.i);
-  if (!issued || issued > windowEnd) return null;
+  if (!issued || issued > DATA_END) return null;
   const paid = x.s === "paid" ? etDate(x.paidAt || x.u) : null; // paidAt when verified, else last update
   if (paid && paid <= issued) return null; // paid the day it was issued: never open at a week's end
   const amount = Math.round(x.s === "paid" ? Number(x.v) : Number(x.b) > 0 ? Number(x.b) : Number(x.v));
@@ -359,6 +408,7 @@ const company = {
       "Call every callback customer personally within 24 hours.",
     ],
   },
+  weekToDate,
   techs,
   weeks,
   quotes,
@@ -368,7 +418,7 @@ const company = {
 };
 
 const data = {
-  meta: { asOf: ASOF, source: "jobber", note: "Real Nova Filters data from Jobber. Customer names shortened to first name + last initial." },
+  meta: { asOf: ASOF, through: DATA_END, today: TODAY, source: "jobber", note: "Real Nova Filters data from Jobber. Customer names shortened to first name + last initial." },
   companies: [company],
 };
 
@@ -391,6 +441,7 @@ console.log("jobs:", jobs.length, "real,", dropped.length, "dropped as test/inte
 console.log("unassigned completed jobs in window:", inWindowDone.filter((j) => j.techId === "unassigned").length, "; office:", inWindowDone.filter((j) => j.techId === "office").length, "; office staff:", [...OFFICE].join(", "));
 console.log("leak calls in window:", leakJobs.length, "; traced callbacks:", callbacks.length, "; avg FC ticket:", avgFc);
 console.log("quotes:", quotes.length, "(open", quotes.filter((q) => q.status === "open").length + ")", "; invoices kept:", invoices.length, "(unpaid now", invoices.filter((x) => !x.paidDate).length + ")", "; left out as over a year old:", staleInvoices.length, "$" + staleTotal);
+if (weekToDate) console.log("this week so far:", weekToDate.start, "to", weekToDate.through, JSON.stringify(weekToDate.now), "| same days last week:", JSON.stringify(weekToDate.lastWeek), "| 4-wk avg:", JSON.stringify(weekToDate.avg4));
 weeks.forEach((w) => console.log(" ", w.weekStart, "rev", w.revenue, "jobs", w.jobsCompleted, "booked", w.metrics.booked, "systems", w.metrics.systems, "leaks", w.metrics.leakCalls, "FCs", w.metrics.fcsBooked, JSON.stringify(w.breakdown.booked)));
 if (CHECK) {
   // Reference week from the weekly-totals playbook: Sep 21-27, 2026.

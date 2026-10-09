@@ -50,6 +50,7 @@
   function daysBetween(a, b) { return Math.round((d(b) - d(a)) / 864e5); }
   function inRange(s, start, end) { return !!s && s >= start && s <= end; }
   function shortDate(s) { var x = d(s); return MONTHS[x.getUTCMonth()] + " " + x.getUTCDate(); }
+  function dayShort(s) { return DAY_NAMES[(d(s).getUTCDay() + 6) % 7].slice(0, 3); }
   function slashDate(s) { var x = d(s); return x.getUTCMonth() + 1 + "/" + x.getUTCDate(); }
   function weekday(s) { return DAY_SHORT[(d(s).getUTCDay() + 6) % 7]; }
 
@@ -424,6 +425,17 @@
     });
   }
 
+  // Invoices 30+ days late on a given day. On the report's own Monday that's last week's list; a
+  // mid-week refresh recounts as of that day, so invoices paid since then drop off the call list.
+  function unpaidOn(c, cur, day) {
+    if (!day || day === cur.snapshot) return cur.unpaid30List;
+    return c.invoices.filter(function (inv) {
+      return inv.issuedDate < day && (!inv.paidDate || inv.paidDate > day);
+    }).map(function (inv) {
+      return Object.assign({}, inv, { daysOutstanding: daysBetween(inv.issuedDate, day) });
+    }).filter(function (inv) { return inv.daysOutstanding >= CONFIG.unpaidDays; });
+  }
+
   function leaks(c, weeks, asOf) {
     var cur = weeks[weeks.length - 1];
     var team = teamAverages(cur);
@@ -444,12 +456,13 @@
       });
     }
 
-    var ar = cur.unpaid30List.slice().sort(byDesc(function (x) { return x.daysOutstanding; }));
+    var arList = unpaidOn(c, cur, asOf);
+    var ar = arList.slice().sort(byDesc(function (x) { return x.daysOutstanding; }));
     if (ar.length) {
       items.push({
         kind: "unpaid",
         title: "Invoices unpaid " + CONFIG.unpaidDays + "+ days",
-        amount: cur.unpaid30,
+        amount: arList === cur.unpaid30List ? cur.unpaid30 : sum(ar, function (x) { return x.amount; }),
         detail: plural(ar.length, "invoice") + ". Oldest is " + ar[0].daysOutstanding + " days.",
         rows: ar.slice(0, 3).map(function (x) { return [x.customer, x.description + " · " + x.daysOutstanding + " days", money(x.amount)]; }),
         more: ar.length - 3,
@@ -849,23 +862,47 @@
     return { checks: checks, problems: problems, ok: problems.length === 0 };
   }
 
+  // "This week so far": the days after the last full week, against the same weekdays before.
+  var WTD_TILES = ["revenue", "jobs", "booked", "systems"];
+  function weekToDate(c) {
+    var w = c.weekToDate;
+    if (!w) return null;
+    var all = SCORECARD.concat(EXTRA_TILES);
+    var tiles = WTD_TILES.filter(function (k) { return w.now[k] !== undefined; }).map(function (k) {
+      var base = find(all, function (x) { return x.key === k; });
+      var def = Object.assign({}, base, { label: termOf(c, "tile_" + k, base.label) });
+      var v = w.now[k], p = w.lastWeek[k], a = w.avg4[k];
+      var delta = p === 0 && v === 0 ? 0 : change(v, p);
+      var vsAvg = change(v, a);
+      return { key: k, label: def.label, def: def, value: v, prev: p, avg4: a, delta: delta, vsAvg: vsAvg, tone: tone(delta, def), avgTone: tone(vsAvg, def) };
+    });
+    return Object.assign({}, w, { tiles: tiles });
+  }
+
+  // asOf = the Monday after the report week. opts.today = the day it's read (a mid-week refresh);
+  // open quotes and unpaid invoices are counted as of that day.
   function buildReport(c, asOf, opts) {
+    opts = opts || {};
+    var today = opts.today || asOf;
     var weeks = c.weeks.map(function (_, i) { return weekMetrics(c, i); });
     var cur = weeks[weeks.length - 1];
-    var leakModel = leaks(c, weeks, asOf);
+    var leakModel = leaks(c, weeks, today);
     var model = {
       company: c,
       asOf: asOf,
-      live: !!(opts && opts.live),
+      today: today,
+      through: opts.through || null,
+      wtd: weekToDate(c),
+      live: !!opts.live,
       weeks: weeks,
       cur: cur,
       prev: weeks[weeks.length - 2],
       team: teamAverages(cur),
       scorecard: scorecard(weeks, c),
       leaks: leakModel,
-      pipeline: pipeline(c, asOf, cur),
+      pipeline: pipeline(c, today, cur),
       aging: aging(cur),
-      actions: actions(c, weeks, asOf, leakModel),
+      actions: actions(c, weeks, today, leakModel),
       wins: wins(c, weeks),
       integrity: reconcile(c),
     };
@@ -899,6 +936,13 @@
         open += Math.abs(vsAvg) >= 0.02 ? " and " + pct(Math.abs(vsAvg)) + (vsAvg > 0 ? " over" : " under") + " your 4-week average." : ".";
       }
       s.push(open);
+
+      var w = m.wtd;
+      if (w && w.days) {
+        var wch = change(w.now.revenue, w.lastWeek.revenue);
+        s.push("So far this week (" + dayShort(w.start) + (w.days > 1 ? "–" + dayShort(w.through) : "") + "), the team has finished " + money(w.now.revenue) + " on " + w.now.jobs + " jobs" +
+          (wch === null || Math.abs(wch) < 0.02 ? ", about even with the same days last week." : ", " + (wch > 0 ? "up " : "down ") + pct(Math.abs(wch)) + " from the same days last week."));
+      }
 
       var lead = m.actions[0] ? m.actions[0].kind : null;
       var leakOf = function (k) { return find(m.leaks.items, function (x) { return x.kind === k; }); };
@@ -1131,7 +1175,9 @@
       "<h1>" + esc(c.name) + "</h1>" +
       '<p class="co-meta"><span>' + esc(c.trade) + "</span> <span>· " + esc(c.serviceArea) + "</span> <span>· " + plural(currentTeam(m).length, "tech") + "</span></p></div></div>" +
       '<div class="head-meta"><span class="pill-meta">' + icon("clock") + "Mon " + shortDate(m.cur.start) + " – Sun " + shortDate(m.cur.end) + ", " + d(m.cur.end).getUTCFullYear() + "</span>" +
-      '<span class="pill-meta"><span class="dot" aria-hidden="true"></span>Delivered Monday, ' + shortDate(m.asOf) + " · " + CONFIG.deliveryTime + "</span></div>" +
+      (m.through && m.today !== m.asOf
+        ? '<span class="pill-meta"><span class="dot" aria-hidden="true"></span>Updated ' + dayShort(m.today) + " " + shortDate(m.today) + " · data through " + dayShort(m.through) + " " + shortDate(m.through) + "</span></div>"
+        : '<span class="pill-meta"><span class="dot" aria-hidden="true"></span>Delivered Monday, ' + shortDate(m.asOf) + " · " + CONFIG.deliveryTime + "</span></div>") +
       "</header>"
     );
   }
@@ -1147,6 +1193,34 @@
       '<button type="button" class="hero-stat is-link"' + openAttr("changes") + '><span>Upside</span><b class="pos">' + approx(m.changes.yearlyTotal + m.changes.oneTimeTotal) + "</b></button>" +
       "</div></section>"
     );
+  }
+
+  function renderWeekToDate(m) {
+    var w = m.wtd;
+    if (!w) return "";
+    var span = dayShort(w.start) + " " + shortDate(w.start) + (w.days > 1 ? " – " + dayShort(w.through) + " " + shortDate(w.through) : "");
+    var days = dayShort(w.start) + (w.days > 1 ? "–" + dayShort(w.through) : "");
+    var tiles = w.tiles.map(function (t) {
+      return '<div class="tile static">' +
+        '<span class="tile-label">' + t.label + "</span>" +
+        '<span class="tile-value"><span>' + t.def.fmt(t.value) + "</span></span>" +
+        '<span class="tile-delta tone-' + t.tone + '">' + arrow(t.delta) + fmtDelta(t) + ' <span class="muted">vs last wk</span>' + toneSr(t.tone) + "</span>" +
+        '<span class="tile-avg tone-' + t.avgTone + '">' + fmtVsAvg(t) + toneSr(t.avgTone) + "</span></div>";
+    }).join("");
+    var extra = [];
+    if (w.now.leakCalls !== undefined) extra.push({ label: termOf(m.company, "tile_leakCalls", "Leak calls booked"), value: String(w.now.leakCalls), sub: w.lastWeek.leakCalls + " last " + days, tone: tone(change(w.now.leakCalls, w.lastWeek.leakCalls), { good: "down" }) });
+    if (w.now.fcsBooked !== undefined) extra.push({ label: "Filter changes booked", value: String(w.now.fcsBooked), sub: w.lastWeek.fcsBooked + " last " + days, tone: tone(change(w.now.fcsBooked, w.lastWeek.fcsBooked), { good: "up" }) });
+    var techs = (w.techs || []).map(function (s) {
+      var t = find(m.company.techs, function (x) { return x.id === s.techId; });
+      return { label: t ? t.name : s.techId === "office" ? "Office" : "No tech on record", sub: plural(s.jobs, "job"), value: s.revenue, display: money(s.revenue) };
+    });
+    return section("wtd", "This Week So Far", "clock",
+      '<p class="wtd-span">' + span + " · compared with " + days + " last week</p>" +
+      '<div class="tiles">' + tiles + "</div>" +
+      (extra.length ? statGrid(extra).replace('class="stat-grid"', 'class="stat-grid two"') : "") +
+      (techs.length ? '<h3 class="sub-h">By tech so far</h3>' + hbars(techs) : "") +
+      '<p class="note">"4-wk avg" is the same ' + days + " averaged over the last 4 weeks. A job counts once it\'s marked complete in Jobber.</p>",
+      { aside: '<span class="hint">Through ' + dayShort(w.through) + " " + shortDate(w.through) + "</span>" });
   }
 
   function renderScorecard(m) {
@@ -1319,7 +1393,7 @@
       '<div class="foot-brand">' + logo(30) + '<div><span class="wm">' + wordmark() + "</span><span>" + esc(CONFIG.brand.tagline) + "</span></div></div>" +
       "<p>Pulled automatically from your field-service software. No data entry.</p>" +
       '<p class="fine">' + (ok ? "All totals reconciled: tech and daily numbers match company totals for all " + m.weeks.length + " weeks." : "Data check failed: " + esc(m.integrity.problems.join("; "))) +
-      (m.live ? " Live data from " + esc(m.company.sourceName || "your field-service software") + ", pulled " + shortDate(m.asOf) + ". Customer names are shortened to first name and last initial."
+      (m.live ? " Live data from " + esc(m.company.sourceName || "your field-service software") + ", pulled " + shortDate(m.today) + ". Customer names are shortened to first name and last initial."
         : " Demo data. All names and numbers are fictional.") + "</p>" +
       "</footer>"
     );
@@ -1329,6 +1403,7 @@
     return (
       renderHeader(m) +
       renderSummary(m) +
+      renderWeekToDate(m) +
       renderScorecard(m) +
       renderLeaks(m) +
       renderTrend(m) +
@@ -1504,7 +1579,7 @@
       if (t.field === false) rv = jb = tk = cbc = { sub: "", tone: "" };
       var allCb = m.company.callbacks.filter(function (x) { return x.techId === id; });
       var allRv = (m.company.reviews || []).filter(function (x) { return x.techId === id; });
-      var openQ = openQuotes(m.company, m.asOf).filter(function (q) { return q.techId === id; }).sort(byDesc(function (q) { return q.amount; }));
+      var openQ = openQuotes(m.company, m.today).filter(function (q) { return q.techId === id; }).sort(byDesc(function (q) { return q.amount; }));
       var staleQ = openQ.filter(function (q) { return !q.lastFollowUpDate && q.ageDays > CONFIG.staleQuoteDays; });
       var body =
         '<div class="tech-hero"><span class="lb-av big">' + esc(initials(t.name)) + '</span><div><p class="th-role">' + esc(t.role) + "</p><p class=\"th-rank\">" + (rank ? "#" + rank + " of " + ranked.length + " by revenue last week" : "Not ranked with the field techs") + (isCallbackFlag(t, team) ? ' · <span class="pill">Check in</span>' : "") + "</p></div></div>" +
@@ -1724,7 +1799,7 @@
 
     function show(id) {
       var c = find(data.companies, function (x) { return x.id === id; }) || data.companies[0];
-      state.model = buildReport(c, data.meta.asOf, { live: data.meta.source !== "demo" });
+      state.model = buildReport(c, data.meta.asOf, { live: data.meta.source !== "demo", today: data.meta.today, through: data.meta.through });
       if (!state.model.integrity.ok && root.console) console.warn("Data integrity problems", state.model.integrity.problems);
       out.innerHTML = render(state.model);
       wireCharts(out);
