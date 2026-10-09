@@ -450,7 +450,10 @@
         detail: viewedMode(c)
           ? plural(sq.length, "quote") + " older than " + CONFIG.staleQuoteDays + " days with no decision. " + neverOpened(sq) + "."
           : plural(sq.length, "quote") + " older than " + CONFIG.staleQuoteDays + " days. Nobody has called.",
-        rows: sq.slice(0, 3).map(function (q) { return [q.customer, q.service + " · " + q.ageDays + " days", money(q.amount)]; }),
+        rows: sq.slice(0, 3).map(function (q) {
+          var twice = sq.filter(function (x) { return x.customer === q.customer; }).length > 1;
+          return [q.customer, (twice ? q.id.replace(/^Q-?/, "Quote #") + " · " : "") + q.service + " · " + q.ageDays + " days", money(q.amount)];
+        }),
         more: sq.length - 3,
         list: sq,
       });
@@ -524,14 +527,21 @@
 
     var q = find(leakModel.items, function (x) { return x.kind === "quotes"; });
     if (q) {
-      var top = q.list.slice(0, 3);
-      var others = q.list.length - 1;
+      // One call per customer: someone with two open quotes is one name on the list.
+      var byCust = [];
+      q.list.forEach(function (x) {
+        var g = find(byCust, function (y) { return y.customer === x.customer; });
+        if (g) { g.amount += x.amount; g.count += 1; } else byCust.push({ customer: x.customer, amount: x.amount, count: 1 });
+      });
+      byCust.sort(byDesc(function (x) { return x.amount; }));
+      var top = byCust.slice(0, 3);
+      var others = byCust.length - 1;
       var expected = q.amount * avgClose;
       out.push({
         kind: "quotes",
         value: expected,
         title: "Call " + top[0].customer + (others ? " and " + plural(others, "other") : "") + " about " + money(q.amount) + " in open quotes.",
-        detail: "Start with the biggest: " + listNames(top.map(function (x) { return x.customer + " (" + money(x.amount) + ")"; })) + ". All more than " + CONFIG.staleQuoteDays + " days old " + (viewedMode(c) ? "with no decision yet." : "with no follow-up."),
+        detail: "Start with the biggest: " + listNames(top.map(function (x) { return x.customer + " (" + (x.count > 1 ? x.count + " quotes, " : "") + money(x.amount) + ")"; })) + ". All more than " + CONFIG.staleQuoteDays + " days old " + (viewedMode(c) ? "with no decision yet." : "with no follow-up."),
         impact: "At your normal " + pct(avgClose) + " close rate, that's about " + approx(expected) + " in booked work.",
         open: "leak:quotes",
       });

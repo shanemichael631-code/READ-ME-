@@ -91,7 +91,7 @@ function shortName(full) {
 }
 
 // ---------- test / internal jobs ----------
-const INTERNAL_CLIENTS = [/zztest/i, /^shane novak$/i, /^brad novak$/i];
+const INTERNAL_CLIENTS = [/zztest/i, /^test\b/i, /^shane novak$/i, /^brad novak$/i];
 function isTest(j) {
   const t = j.t || "", cn = (j.cn || "").trim();
   if (/\btest\b/i.test(t.replace(/water\s*test/ig, "")) || /drop\s*off/i.test(t)) return "title"; // "WATER TEST" is real work
