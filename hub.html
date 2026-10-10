@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Nova Hub</title>
+<meta charset="utf-8">
+<style>
+/* Nova Hub, "Field ticket": one printed service sheet (max 980px) on cool paper. Amber-and-navy header rule,
+   a big condensed greeting over sunlit water, a tear-off search rail that sticks, the two reports as hero
+   tickets, then every other group as hairline-ruled list rows (2 or 3 columns on desktop).
+   Core tokens: paper, sheet, ink, accent (aqua), hi (amber). Semantic good/warn stay separate from the accent. */
+:root {
+  --paper: #eceff5;        /* page ground, cool white */
+  --sheet: #ffffff;        /* the ticket */
+  --ink: #14215c;          /* navy ink: headings, titles, rules */
+  --ink-2: #3a4468;        /* body text */
+  --muted: #5f6988;        /* secondary text */
+  --line: #d3d9e7;         /* rules */
+  --line-2: #e6eaf2;       /* hairlines */
+  --soft: #eef1f8;         /* icon tiles, hover fills */
+  --brand: #14215c;        /* solid navy fill (logo, report icon) */
+  --on-brand: #ffffff;
+  --accent: #0b86a3;       /* aqua: interactive, water */
+  --accent-ink: #0a6f87;
+  --accent-soft: #dff3f8;
+  --on-accent: #ffffff;
+  --hi: #f6a609;           /* amber highlight: pins, Monday marker, header stripe */
+  --hi-ink: #7a4100;
+  --hi-soft: #fff0d0;
+  --on-hi: #221500;
+  --warn: #a8440a; --warn-soft: #fff6e6; --on-warn: #ffffff;
+  --good: #067647; --on-good: #ffffff;
+  --caustic: 11, 134, 163;     /* rgb triplets read by the water canvas */
+  --caustic-2: 246, 166, 9;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05);
+  --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 14px 40px rgba(20, 33, 92, .09);
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Sans 3", "Source Sans Pro", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --radius: 16px;
+  --radius-sm: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #090e1d; --sheet: #111931; --ink: #eef1f9; --ink-2: #c7cddd; --muted: #96a0bb;
+    --line: #2b3554; --line-2: #1f2843; --soft: #1b2440; --brand: #2a3f9a; --on-brand: #ffffff;
+    --accent: #4fcbe3; --accent-ink: #86dff0; --accent-soft: #10344a; --on-accent: #062a33;
+    --hi: #fdb022; --hi-ink: #fec84b; --hi-soft: #3a2a08; --on-hi: #221500;
+    --warn: #f4a24a; --warn-soft: #332109; --on-warn: #221500; --good: #47cd89; --on-good: #06281a;
+    --caustic: 79, 203, 227; --caustic-2: 253, 176, 34;
+    --shadow-sm: none; --shadow: 0 20px 48px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #090e1d; --sheet: #111931; --ink: #eef1f9; --ink-2: #c7cddd; --muted: #96a0bb;
+  --line: #2b3554; --line-2: #1f2843; --soft: #1b2440; --brand: #2a3f9a; --on-brand: #ffffff;
+  --accent: #4fcbe3; --accent-ink: #86dff0; --accent-soft: #10344a; --on-accent: #062a33;
+  --hi: #fdb022; --hi-ink: #fec84b; --hi-soft: #3a2a08; --on-hi: #221500;
+  --warn: #f4a24a; --warn-soft: #332109; --on-warn: #221500; --good: #47cd89; --on-good: #06281a;
+  --caustic: 79, 203, 227; --caustic-2: 253, 176, 34;
+  --shadow-sm: none; --shadow: 0 20px 48px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 100px; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink-2);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+}
+h1, h2, h3, p, ul, dl, dd, dt, fieldset, figure { margin: 0; padding: 0; }
+ul { list-style: none; }
+fieldset { border: 0; min-width: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+a { color: inherit; -webkit-tap-highlight-color: transparent; }
+kbd { font: 600 12px/1 var(--font-body); color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 3px 6px; min-width: 22px; display: inline-block; text-align: center; background: var(--sheet); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#copybuf { position: fixed; top: 0; left: 0; } /* focusing the hidden copy buffer must never scroll the page */
+svg.ico { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.skip { position: absolute; left: 16px; top: -60px; z-index: 50; background: var(--ink); color: var(--sheet); padding: 12px 16px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+.skip:focus { top: 12px; }
+
+/* ---------- sheet ---------- */
+.page { max-width: 980px; margin: 0 auto; background: var(--sheet); }
+@media (min-width: 1020px) {
+  .page { margin: 32px auto 56px; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--line); }
+  .head { border-radius: var(--radius) var(--radius) 0 0; }
+  .foot { border-radius: 0 0 var(--radius) var(--radius); }
+}
+
+/* ---------- header ---------- */
+.head { position: relative; padding: 14px 16px 24px; border-top: 6px solid var(--hi); overflow: hidden; isolation: isolate; }
+.head::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--ink); z-index: 1; }
+.head > * { position: relative; z-index: 1; }
+#water { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;
+  -webkit-mask-image: linear-gradient(#000 42%, transparent 96%); mask-image: linear-gradient(#000 42%, transparent 96%); }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
+.brand .logo { display: block; flex: none; }
+.brand h1 { font-family: var(--font-display); font-weight: 500; font-size: 24px; letter-spacing: .02em; color: var(--ink); line-height: 1; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.brand h1 b { font-weight: 700; }
+
+/* theme: native radios styled as a segmented control. Labels stay visible at every width (icons drop on phones). */
+.theme { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); flex: none; }
+.theme label { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0 10px; border-radius: 9px; color: var(--muted); font-size: 13.5px; font-weight: 600; cursor: pointer; transition: background-color .15s, color .15s; }
+.theme label:hover { color: var(--ink); background: var(--soft); }
+.theme label.is-on { background: var(--ink); color: var(--sheet); }
+.theme input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border-radius: 9px; cursor: pointer; -webkit-appearance: none; appearance: none; background: transparent; border: 0; }
+.theme input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.theme input:focus:not(:focus-visible) { outline: 0; }
+.theme input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.theme svg.ico { width: 17px; height: 17px; }
+@media (max-width: 479px) { .theme label { padding: 0 8px; gap: 0; font-size: 13px; } .theme svg.ico { display: none; } .brand h1 { font-size: 23px; } }
+
+.mast { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 22px; }
+.eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); line-height: 1.3; }
+.eyebrow i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--hi); box-shadow: 0 0 0 3px var(--hi-soft); margin-right: 10px; }
+.eyebrow span { white-space: nowrap; }
+.eyebrow span + span::before { content: "\00B7"; margin: 0 .55em; color: var(--hi-ink); opacity: .7; }
+@media (min-width: 600px) { .eyebrow { font-size: 15px; letter-spacing: .14em; } }
+.greet { display: flex; flex-wrap: wrap; column-gap: .22em; row-gap: 0; margin-top: 10px; font-family: var(--font-display); font-weight: 700; font-size: clamp(50px, 14vw, 92px); line-height: .92; letter-spacing: -.012em; color: var(--ink); }
+.greet .g1 { white-space: nowrap; }
+.greet em { font-style: normal; color: var(--accent-ink); white-space: nowrap; }
+.dateline { margin-top: 14px; font-size: 17px; font-weight: 600; color: var(--ink-2); }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px 0 10px; border-radius: 999px; background: var(--hi-soft); color: var(--hi-ink); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.pill svg.ico { width: 15px; height: 15px; stroke-width: 2; }
+.pill.is-today { background: var(--hi); color: var(--on-hi); box-shadow: 0 0 0 3px var(--hi-soft); }
+.pill.is-soft { background: var(--soft); color: var(--ink-2); }
+.hint { margin-top: 12px; font-size: 15px; color: var(--muted); max-width: 56ch; }
+.hint b { color: var(--ink-2); font-weight: 600; }
+@media (min-width: 600px) {
+  .head { padding: 16px 28px 30px; }
+}
+
+/* ---------- search rail (sticky tear-off) ---------- */
+.rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; padding: 8px 16px 8px;
+  background: color-mix(in srgb, var(--sheet) 88%, transparent); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+  border-top: 2px dashed var(--line); border-bottom: 1px solid var(--line-2); }
+@supports not (background: color-mix(in srgb, red 50%, blue)) { .rail { background: var(--sheet); } }
+.search { display: flex; align-items: center; gap: 6px; height: 48px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--sheet); padding: 0 6px 0 12px; box-shadow: var(--shadow-sm); transition: border-color .15s, box-shadow .15s; }
+.search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search > svg.ico { color: var(--accent); }
+.search input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; font: inherit; font-size: 16px; color: var(--ink); outline: none; padding: 0 4px; }
+.search input::placeholder { color: var(--muted); opacity: 1; }
+.search input::-webkit-search-cancel-button, .search input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+.count { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; padding: 0 4px; }
+.clear { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 9px; color: var(--muted); }
+.clear:hover { background: var(--soft); color: var(--ink); }
+.search kbd { margin-right: 4px; }
+.status { margin: 6px 2px 0; font-size: 13px; line-height: 1.35; color: var(--muted); min-height: 18px; }
+.status b { color: var(--ink-2); font-weight: 600; }
+@media (max-width: 599px) { .search kbd { display: none; } }
+@media (min-width: 600px) { .rail { padding: 10px 28px 9px; } }
+
+/* ---------- body ---------- */
+.body { padding: 4px 16px 10px; }
+@media (min-width: 600px) { .body { padding: 6px 28px 16px; } }
+.sec { padding: 18px 0 6px; }
+.sec-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding-bottom: 7px; border-bottom: 2px solid var(--ink); }
+.sec-h h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); line-height: 1.1; display: flex; align-items: center; gap: 8px; }
+.sec-h h2 svg.ico { width: 18px; height: 18px; color: var(--hi-ink); }
+.sec-h .n { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.sec-h .blurb { font-size: 14px; color: var(--muted); flex-basis: 100%; order: 3; }
+.sec-h .link-btn { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; padding: 0 8px; margin-top: -12px; margin-bottom: -12px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); }
+.sec-h .link-btn:hover { background: var(--accent-soft); }
+@media (min-width: 600px) { .sec-h .blurb { flex-basis: auto; order: 0; } .sec-h .n, .sec-h .link-btn { order: 1; } }
+
+/* pinned mini tiles: shortcuts to links that also stay in their group; the star on each one unpins it */
+.stubs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 12px 0 4px; }
+@media (max-width: 359px) { .stubs { grid-template-columns: 1fr 1fr; } }
+.stub { position: relative; min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); transition: border-color .15s, background-color .15s, transform .12s; }
+.stub:hover { border-color: var(--accent); background: var(--accent-soft); }
+.stub:active { transform: scale(.985); }
+.stub-link { display: grid; gap: 7px; padding: 8px 10px 10px; min-height: 76px; text-decoration: none; color: var(--ink); font-weight: 600; font-size: 14px; line-height: 1.25; min-width: 0; }
+.stub-link::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+.stub-link:focus-visible { outline: none; }
+.stub-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stub .tile-ico { width: 36px; height: 36px; border-radius: 9px; }
+.stub .tile-ico svg.ico { width: 19px; height: 19px; }
+.stub .t { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.stub .act { position: absolute; top: 3px; right: 3px; z-index: 1; }
+.stubs-empty { grid-column: 1 / -1; padding: 12px 0 6px; font-size: 14.5px; color: var(--muted); }
+
+/* recent chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0 2px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 13px 0 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: none; background: var(--sheet); }
+.chip svg.ico { width: 16px; height: 16px; color: var(--muted); }
+.chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.chip:active { transform: scale(.97); }
+
+/* shared icon tile and action buttons */
+.tile-ico { width: 44px; height: 44px; border-radius: 11px; background: var(--soft); color: var(--ink); display: grid; place-items: center; flex: none; transition: box-shadow .15s, transform .18s; }
+.tile-ico svg.ico { width: 22px; height: 22px; }
+.tile-ico.tone-navy { background: var(--brand); color: var(--on-brand); }
+.tile-ico.tone-aqua { background: var(--accent-soft); color: var(--accent-ink); }
+.tile-ico.tone-sun { background: var(--hi-soft); color: var(--hi-ink); }
+.act { position: relative; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 9px; color: var(--muted); transition: background-color .12s, color .12s, transform .12s; }
+.act:hover { background: var(--line-2); color: var(--ink); }
+.act:active { transform: scale(.92); }
+.act.pin[aria-pressed="true"] { color: var(--hi-ink); }
+.act.pin[aria-pressed="true"] svg.ico { fill: var(--hi); stroke: var(--hi-ink); }
+.act.copy.is-copied { color: var(--good); }
+.act .pop { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); background: var(--good); color: var(--on-good); font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow-sm); }
+.act .pop.is-bad { background: var(--warn); color: var(--on-warn); }
+@media (max-width: 599px) { .tile .act.copy .pop { left: auto; right: 0; transform: none; } } /* a centred pop on the edge-most row button would clip at the viewport edge */
+
+/* list rows (every group except Reports) */
+.tiles { display: block; }
+.tile { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ico head act" "ico body body"; column-gap: 10px; row-gap: 2px; align-items: start; margin: 0 -8px; padding: 10px 8px; border-radius: var(--radius-sm); transition: background-color .12s; }
+.tile::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 1px; background: var(--line-2); }
+.tile:last-child::after { display: none; }
+.tile:hover, .tile:focus-within { background: var(--soft); }
+.tile:hover::after, .tile:focus-within::after { background: transparent; }
+.tile .tile-ico { grid-area: ico; }
+.tile:hover .tile-ico, .tile:focus-within .tile-ico { box-shadow: inset 0 0 0 1px var(--line); }
+.tile:hover .tile-ico.tone-navy, .tile:focus-within .tile-ico.tone-navy { box-shadow: none; }
+.tile-head { grid-area: head; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 44px; min-width: 0; }
+.tile-link { font-weight: 600; color: var(--ink); text-decoration: none; font-size: 16.5px; line-height: 1.25; }
+.tile-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-sm); }
+.tile-link:focus-visible { outline: none; }
+.tile-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile:hover .tile-link { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.tile-act { grid-area: act; position: relative; z-index: 1; display: flex; margin-right: -6px; }
+.tile-body { grid-area: body; min-width: 0; display: grid; gap: 6px; padding-bottom: 2px; }
+.desc { font-size: 15px; line-height: 1.4; color: var(--ink-2); max-width: 64ch; }
+.host { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); min-width: 0; max-width: 100%; }
+.host svg.ico { width: 13px; height: 13px; stroke-width: 2; }
+.host span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badges { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: var(--soft); color: var(--ink-2); white-space: nowrap; }
+.tile:hover .badge, .tile:focus-within .badge { background: var(--sheet); box-shadow: inset 0 0 0 1px var(--line); }
+.badge.t-aqua { background: var(--accent-soft); color: var(--accent-ink); }
+.badge.t-warn { background: var(--warn-soft); color: var(--warn); }
+.badge.t-good { background: var(--accent-soft); color: var(--good); }
+.badge.t-new { background: var(--hi); color: var(--on-hi); box-shadow: 0 0 0 3px var(--hi-soft); }
+.badge.t-new svg.ico { width: 12px; height: 12px; stroke-width: 2.2; }
+.tile:hover .badge.t-aqua, .tile:focus-within .badge.t-aqua, .tile:hover .badge.t-good, .tile:focus-within .badge.t-good { background: var(--accent-soft); box-shadow: none; }
+.tile:hover .badge.t-warn, .tile:focus-within .badge.t-warn { background: var(--warn-soft); box-shadow: none; }
+.note { display: flex; gap: 6px; align-items: flex-start; font-size: 13.5px; line-height: 1.35; color: var(--muted); max-width: 64ch; }
+.note svg.ico { width: 15px; height: 15px; margin-top: 2px; color: var(--hi-ink); }
+.subs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; position: relative; z-index: 1; padding: 2px 0; }
+.subs-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.subs a { position: relative; display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none; background: var(--sheet); transition: border-color .12s, background-color .12s; }
+.subs a::before { content: ""; position: absolute; inset: -4px 0; } /* 44px hit area on a 36px chip */
+.subs a:hover { border-color: var(--accent); background: var(--accent-soft); }
+.subs a svg.ico { width: 14px; height: 14px; stroke-width: 2; }
+@media (min-width: 900px) {
+  .tiles[data-cols="2"], .tiles[data-cols="3"] { display: grid; column-gap: 40px; align-items: start; }
+  .tiles[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tiles[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; }
+  .tiles[data-cols="2"] .tile:nth-last-child(-n+2)::after, .tiles[data-cols="3"] .tile:nth-last-child(-n+3)::after { display: none; }
+}
+
+/* hero tickets: the Reports group only */
+.heroes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; padding: 14px 0 4px; }
+.hero { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr auto; grid-template-areas: "ico body" "foot foot"; gap: 8px 14px; padding: 16px 16px 10px; min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(165deg, var(--accent-soft), var(--sheet) 46%); box-shadow: var(--shadow-sm); transition: border-color .15s, transform .18s, box-shadow .18s; }
+.hero.is-demo { background: linear-gradient(165deg, var(--hi-soft), var(--sheet) 46%); }
+.hero .tile-ico { grid-area: ico; width: 56px; height: 56px; border-radius: 15px; }
+.hero .tile-ico svg.ico { width: 28px; height: 28px; }
+.hero.is-demo .tile-ico { background: var(--hi-soft); color: var(--hi-ink); box-shadow: inset 0 0 0 1px var(--hi); }
+.hero-body { grid-area: body; min-width: 0; display: grid; gap: 8px; align-content: start; }
+.hero-title { font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 6.5vw, 30px); line-height: 1.02; letter-spacing: .004em; color: var(--ink); overflow-wrap: anywhere; }
+.hero-title .tile-link { font: inherit; color: inherit; }
+.hero-title .tile-link::after { border-radius: var(--radius); }
+.hero:hover .hero-title .tile-link { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.hero.is-demo:hover .hero-title .tile-link { text-decoration-color: var(--hi); }
+.hero .desc { max-width: 52ch; }
+.hero-foot { grid-area: foot; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--line-2); }
+.cta { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 16px; border-radius: 999px; background: var(--accent-ink); color: var(--on-accent); font-size: 14px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+.cta svg.ico { width: 15px; height: 15px; stroke-width: 2.4; transition: transform .18s; }
+.hero.is-demo .cta { background: var(--hi); color: var(--on-hi); }
+.hero.is-new { border-color: var(--hi); box-shadow: 0 0 0 3px var(--hi-soft), 0 12px 32px rgba(246, 166, 9, .16); }
+.hero.is-new .tile-ico { box-shadow: 0 0 0 3px var(--hi-soft), 0 0 18px var(--hi); }
+@media (max-width: 479px) {
+  .hero { padding: 14px 14px 8px; gap: 8px 12px; }
+  .hero .tile-ico { width: 48px; height: 48px; border-radius: 13px; }
+  .hero .tile-ico svg.ico { width: 25px; height: 25px; }
+}
+
+/* week progress strip on the Nova report (real content, computed from the clock) */
+.week { display: grid; gap: 6px; margin-top: 2px; }
+.days { display: flex; gap: 5px; }
+.day { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--muted); text-align: center; }
+.day i { display: block; height: 7px; border-radius: 4px; background: var(--line); margin-bottom: 4px; }
+.day.done { color: var(--ink-2); }
+.day.done i { background: var(--accent); }
+.day.now { color: var(--hi-ink); }
+.day.now i { background: var(--hi); box-shadow: 0 0 10px var(--hi); }
+.week-cap { font-size: 13.5px; color: var(--muted); }
+
+/* sample chart on the demo report (made-up numbers, says so) */
+.sample { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: end; margin-top: 2px; }
+.sample svg { grid-column: 1 / -1; width: 100%; max-width: 230px; height: auto; display: block; }
+.sample .bar { fill: var(--accent); opacity: .42; }
+.sample .bar.max { fill: var(--hi); opacity: 1; }
+.sample .base { stroke: var(--line); stroke-width: 1; }
+.sample .lbl { font: 600 8.5px var(--font-body); fill: var(--muted); }
+.sample-cap { font-size: 13.5px; color: var(--muted); }
+.sample-tag { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--warn); border: 1px dashed var(--warn); border-radius: 6px; padding: 2px 7px; }
+
+/* empty state */
+.empty { padding: 28px 0 24px; display: flex; gap: 14px; align-items: flex-start; }
+.empty .tile-ico { flex: none; }
+.empty h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); }
+.empty p { color: var(--muted); font-size: 15px; margin-top: 4px; }
+.empty button { margin-top: 12px; min-height: 44px; padding: 0 16px; border-radius: 10px; background: var(--ink); color: var(--sheet); font-weight: 600; }
+
+/* ---------- footer ---------- */
+.foot { padding: 18px 16px 26px; border-top: 2px dashed var(--line); display: grid; gap: 14px 24px; font-size: 13.5px; color: var(--muted); }
+.foot-brand { display: flex; gap: 10px; align-items: flex-start; min-width: 0; max-width: 560px; }
+.foot-brand .logo { flex: none; margin-top: 1px; }
+.foot b { color: var(--ink-2); font-weight: 600; }
+.foot code { font: 600 12.5px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink-2); background: var(--soft); border: 1px solid var(--line-2); border-radius: 5px; padding: 2px 5px; }
+.foot-meta { display: grid; gap: 8px; min-width: 0; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.keys span { display: inline-flex; align-items: center; gap: 5px; }
+@media (max-width: 599px), (hover: none) and (pointer: coarse) { .keys { display: none; } }
+@media (min-width: 600px) { .foot { padding: 20px 28px 28px; grid-template-columns: minmax(0, 1fr) auto; align-items: start; } }
+
+.toast { position: fixed; left: 16px; right: 16px; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateY(8px); z-index: 60; background: var(--ink); color: var(--sheet); padding: 11px 15px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; display: flex; gap: 8px; align-items: center; }
+.toast.show { opacity: 1; transform: none; }
+.toast svg.ico { width: 16px; height: 16px; }
+
+/* hover-only micro-motion; touch devices never see it */
+@media (hover: hover) {
+  .hero:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow); }
+  .hero.is-demo:hover { border-color: var(--hi); }
+  .hero.is-new:hover { box-shadow: 0 0 0 3px var(--hi-soft), var(--shadow); }
+  .hero:hover .tile-ico { transform: rotate(-5deg) scale(1.05); }
+  .hero:hover .cta svg.ico { transform: translate(2px, -2px); }
+  .stub:hover .tile-ico { transform: rotate(-5deg) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  .hero:hover, .stub:hover, .stub:active, .chip:active, .act:active, .hero:hover .tile-ico, .stub:hover .tile-ico, .hero:hover .cta svg.ico { transform: none !important; }
+}
+</style>
+<script>
+/* Apply the saved theme before first paint. Storage may be blocked; fall through to System. */
+(function () { try { var t = JSON.parse(localStorage.getItem('novahub.theme')); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Launcher for the Nova Filters team: owner reports, booking, operations apps and everyday logins.">
+<meta name="theme-color" content="#14215c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8.5' fill='%2314215c'/%3E%3Cpath d='M14.4 6.8c3.6 4.6 6.3 8.1 6.3 11.4a6.3 6.3 0 0 1-12.6 0c0-3.3 2.7-6.8 6.3-11.4z' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linejoin='round'/%3E%3Cpath d='M11.2 19.4c1.1-.9 2.2-.9 3.3 0s2.2.9 3.3 0' fill='none' stroke='%234fcbe3' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='25' cy='8.4' r='2.9' fill='%23f6a609'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+</head>
+<body>
+<a class="skip" href="#groups">Skip to links</a>
+<div class="page">
+  <header class="head">
+    <canvas id="water" aria-hidden="true"></canvas>
+    <div class="topbar">
+      <div class="brand">
+        <svg class="logo" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8.5" fill="var(--brand)"/>
+          <path d="M14.4 6.8c3.6 4.6 6.3 8.1 6.3 11.4a6.3 6.3 0 0 1-12.6 0c0-3.3 2.7-6.8 6.3-11.4z" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>
+          <path d="M11.2 19.4c1.1-.9 2.2-.9 3.3 0s2.2.9 3.3 0" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="25" cy="8.4" r="2.9" fill="var(--hi)"/>
+        </svg>
+        <h1><b>Nova</b> Hub</h1>
+      </div>
+      <fieldset class="theme" id="theme">
+        <legend class="sr">Theme</legend>
+        <label><input type="radio" name="theme" value="light" id="theme-light"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg><span>Light</span></label>
+        <label><input type="radio" name="theme" value="dark" id="theme-dark"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><span>Dark</span></label>
+        <label><input type="radio" name="theme" value="system" id="theme-system" checked><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>System</span></label>
+      </fieldset>
+    </div>
+    <div class="mast">
+      <p class="eyebrow"><i aria-hidden="true"></i><span>Nova Filters</span><span>Superior Filters</span><span>Wildwood, FL</span></p>
+      <p class="greet" id="greet-line"><span class="g1"><span id="greet">Hello</span>,</span> <em>crew.</em></p>
+      <p class="dateline"><time id="today" datetime=""></time></p>
+      <p class="pills" id="pills"></p>
+      <p class="hint" id="hint"></p>
+    </div>
+  </header>
+
+  <div class="rail">
+    <form class="search" id="searchform" role="search">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+      <input id="search" type="search" placeholder="Search links or groups" aria-label="Search links" aria-describedby="status" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <span class="count" id="count" aria-hidden="true"></span>
+      <button type="button" class="clear" id="clear" aria-label="Clear search" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <kbd aria-hidden="true">/</kbd>
+    </form>
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
+
+  <main class="body">
+    <section class="sec" id="pinned" aria-labelledby="pinned-h">
+      <div class="sec-h"><h2 id="pinned-h"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z"/></svg>Pinned</h2><span class="n" id="pinned-n"></span><p class="blurb">Star a link to keep it here. Saved on this device.</p></div>
+      <ul class="stubs" id="stubs"></ul>
+    </section>
+    <section class="sec" id="recent" aria-labelledby="recent-h" hidden>
+      <div class="sec-h"><h2 id="recent-h"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/></svg>Recently opened</h2><button type="button" class="link-btn" id="clear-recent">Clear</button><p class="blurb">On this device, newest first.</p></div>
+      <div class="chips" id="chips"></div>
+    </section>
+    <div class="groups" id="groups"></div>
+    <div class="empty" id="empty" hidden>
+      <span class="tile-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/><path d="M8.5 11h5"/></svg></span>
+      <div>
+        <h2>No matches</h2>
+        <p>Try &ldquo;report&rdquo;, &ldquo;booking&rdquo; or &ldquo;van&rdquo;.</p>
+        <button type="button" id="empty-clear">Clear search</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-brand">
+      <svg class="logo" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8.5" fill="var(--brand)"/>
+        <path d="M14.4 6.8c3.6 4.6 6.3 8.1 6.3 11.4a6.3 6.3 0 0 1-12.6 0c0-3.3 2.7-6.8 6.3-11.4z" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>
+        <path d="M11.2 19.4c1.1-.9 2.2-.9 3.3 0s2.2.9 3.3 0" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="25" cy="8.4" r="2.9" fill="var(--hi)"/>
+      </svg>
+      <div>
+        <p><b>Nova Filters</b> &middot; Wildwood, FL</p>
+        <p>RO systems, softeners, whole-house filters, UV and plumbing. Also trades as Superior Filters.</p>
+      </div>
+    </div>
+    <div class="foot-meta">
+      <p>Edit links in <code>hub.html</code> (<code>HUB</code> array)</p>
+      <p class="keys"><span><kbd>/</kbd> search</span><span><kbd>Enter</kbd> open first match</span><span><kbd>Esc</kbd> clear</span></p>
+    </div>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<textarea id="copybuf" class="sr" tabindex="-1" aria-hidden="true" readonly></textarea>
+
+<script>
+(function () {
+  'use strict';
+
+  // ===== EDIT YOUR LINKS HERE =====
+  // One entry per link: id, title, desc, url, group, icon, and optional badges, note, sublinks.
+  // Groups appear in the order listed in GROUPS below; a group that is not listed there is appended in
+  // the order its first link appears here.
+  var HUB = [
+    { id: 'report-nova', group: 'Reports', icon: 'report', title: 'Nova Filters Owner Report',
+      desc: 'Last week\'s Jobber numbers in plain English: money leaks, tech leaderboard and 3 things to do.',
+      url: 'https://nova-owner-report.vercel.app', badges: ['Private', 'Sign-in'],
+      note: 'Opens in Safari or Chrome. Sign in with the team Vercel account when asked.' },
+    { id: 'report-demo', group: 'Reports', icon: 'demo', title: 'Monday Owner Report demo',
+      desc: 'The public demo of the same report with made-up companies. Share this one with prospects.',
+      url: 'https://monday-owner-report.vercel.app', badges: ['Demo', 'Fake data'],
+      sublinks: [
+        { label: 'Plumbing', url: 'https://monday-owner-report.vercel.app/#plumbing' },
+        { label: 'HVAC', url: 'https://monday-owner-report.vercel.app/#hvac' },
+        { label: 'Pest', url: 'https://monday-owner-report.vercel.app/#pest' }
+      ] },
+    { id: 'booking', group: 'Booking & sales', icon: 'booking', title: 'Online booking',
+      desc: 'Customer-facing booking form. Text this link to a customer or put it on the website.',
+      url: 'https://script.google.com/macros/s/AKfycbw0Pezr6xtO9oKAXSYLDcYyHEka9YlPV7sGiPChCz0B3Hx59m_RkScEAQTi6EYJ16H6/exec',
+      badges: ['Customer-facing'] },
+    { id: 'booking-hub', group: 'Booking & sales', icon: 'inbox', title: 'Booking hub',
+      desc: 'Staff view of incoming online bookings.',
+      url: 'https://script.google.com/macros/s/AKfycbw0Pezr6xtO9oKAXSYLDcYyHEka9YlPV7sGiPChCz0B3Hx59m_RkScEAQTi6EYJ16H6/exec?page=hub',
+      badges: ['Staff'] },
+    { id: 'warehouse', group: 'Operations', icon: 'box', title: 'Warehouse hub',
+      desc: 'Inventory and warehouse app (the original Nova Hub).',
+      url: 'https://script.google.com/macros/s/AKfycby1Xpzg-Gjn5l2aNRF4er-3NMa6cNocryd1_R6BC3yhlb3zWmCAt35AN0zowx-N-Zx5cQ/exec' },
+    { id: 'routes', group: 'Operations', icon: 'route', title: 'Route map',
+      desc: 'Tech routing map.',
+      url: 'https://script.google.com/macros/s/AKfycbwKOhlJy-t6vRiMXagP0ZzY_K89wkHFcxtjH6MpqWNqwpLiJR6_NE5aASDU1NJS5UB02A/exec',
+      badges: ['Alpha'] },
+    { id: 'van', group: 'Operations', icon: 'van', title: 'Van app',
+      desc: 'Truck stock and van checklist.',
+      url: 'https://script.google.com/macros/s/AKfycbygIgQUCHhLzqB_O0WQ-3Sv5OepxifmAQFTrwb7LtB4L-1IJscilyIGuEAuyhFRdr36/exec' },
+    { id: 'jobber', group: 'Everyday logins', icon: 'briefcase', title: 'Jobber',
+      desc: 'Schedule, quotes, jobs and invoices.', url: 'https://secure.getjobber.com' },
+    { id: 'amazon', group: 'Everyday logins', icon: 'cart', title: 'Amazon Seller Central',
+      desc: 'FBM orders, listings and ads.', url: 'https://sellercentral.amazon.com' },
+    { id: 'ebay', group: 'Everyday logins', icon: 'tag', title: 'eBay Seller Hub',
+      desc: 'Orders, listings and messages.', url: 'https://www.ebay.com/sh/ovw' },
+    { id: 'jarvis', group: 'Everyday logins', icon: 'sparkle', title: 'Jarvis assistant',
+      desc: 'Notes, tasks and reminders.', url: 'https://jarvis-assistant-shanemichael631-3943.vercel.app', badges: ['Beta'] }
+  ];
+  // Pinned on a device that has never set pins. Pinned links stay in their group too; the Pinned
+  // row is a shortcut row, not a move.
+  var DEFAULT_PINS = ['report-nova', 'booking', 'warehouse', 'jobber'];
+  // Group order, blurb, layout and icon tint. layout 'hero' renders big ticket tiles (Reports);
+  // 'list' renders hairline rows in `cols` columns on desktop. tone: navy | aqua | sun | neutral.
+  var GROUPS = [
+    { name: 'Reports', blurb: 'Last week in numbers. A new report lands every Monday.', layout: 'hero', tone: 'navy' },
+    { name: 'Booking & sales', blurb: 'Where new work comes in.', layout: 'list', cols: 2, tone: 'aqua' },
+    { name: 'Operations', blurb: 'Stock, routes and the vans.', layout: 'list', cols: 3, tone: 'sun' },
+    { name: 'Everyday logins', blurb: 'The tabs that are always open.', layout: 'list', cols: 2, tone: 'neutral' }
+  ];
+  // ===== END OF LINKS =====
+
+  var ICONS = {
+    report: '<path d="M5 20h14"/><path d="M7.5 16v-5"/><path d="M12 16V5.5"/><path d="M16.5 16v-8"/>',
+    demo: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M10.5 7.8l4 2.2-4 2.2z"/><path d="M12 16v4M8.5 20h7"/>',
+    booking: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M9 15.5l2 2 4-4"/>',
+    inbox: '<path d="M4 13V7.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2V13"/><path d="M4 13h4.5l1.5 2.5h4L15.5 13H20v4.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>',
+    box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><path d="M12 12v9"/>',
+    route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H13a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h4.5"/>',
+    van: '<path d="M2.5 7.5h11v8.5h-11z"/><path d="M13.5 10.5h4l3 3v2.5h-7"/><circle cx="7" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/>',
+    cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2l2.4 11h11.2L21 8H6.3"/>',
+    tag: '<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+    sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
+    star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2"/>',
+    external: '<path d="M7 17L17 7"/><path d="M9 7h8v8"/>',
+    check: '<path d="M5 12.5l4 4L19 7"/>',
+    info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2.5"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17"/>'
+  };
+  // Badge tone by meaning, kept separate from the accent: warn for things that are not real yet,
+  // aqua for labs, good for customer-facing. Anything else is neutral.
+  var BADGE_TONE = { 'Customer-facing': 't-good', 'Demo': 't-warn', 'Fake data': 't-warn', 'Alpha': 't-aqua', 'Beta': 't-aqua' };
+  var KEYS = { pins: 'novahub.pins', theme: 'novahub.theme', recent: 'novahub.recent' };
+  var SAMPLE_DAYS = [52, 68, 44, 90, 76, 31, 12]; // relative bar heights for the demo preview; made up on purpose
+
+  // ---------- helpers ----------
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function icon(name, cls) { return '<svg class="ico' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.link) + '</svg>'; }
+  function load(key) { try { var v = localStorage.getItem(key); return v === null ? null : JSON.parse(v); } catch (e) { return null; } }
+  function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+  function byId(id) { for (var i = 0; i < HUB.length; i++) if (HUB[i].id === id) return HUB[i]; return null; }
+  function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  function hostOf(u) { try { return new URL(u).host.replace(/^www\./, ''); } catch (e) { return ''; } }
+  // Display form of a host: a long project host (jarvis-assistant-....vercel.app) shows its last two labels so it never truncates.
+  function shortHost(u) { var h = hostOf(u); return h.length > 28 ? h.split('.').slice(-2).join('.') : h; }
+  function fmt(d, o) { try { return d.toLocaleDateString('en-US', o); } catch (e) { return d.toDateString(); } }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function mostRecentMonday(d) { var s = startOfDay(d); return addDays(s, -((s.getDay() + 6) % 7)); }
+  function isoWeek(d) { d = startOfDay(d); d.setDate(d.getDate() + 4 - (d.getDay() || 7)); var y = new Date(d.getFullYear(), 0, 1); return Math.ceil(((d - y) / 864e5 + 1) / 7); }
+
+  // ---------- clock ----------
+  // Device clock, with two preview hooks: ?today=YYYY-MM-DD pins the date, #monday jumps to this week's Monday.
+  function today() {
+    var now = new Date();
+    try {
+      var ov = new URLSearchParams(location.search).get('today');
+      if (ov && /^\d{4}-\d{2}-\d{2}$/.test(ov)) { var p = ov.split('-'); now = new Date(+p[0], +p[1] - 1, +p[2], now.getHours(), now.getMinutes()); }
+    } catch (e) {}
+    if (location.hash === '#monday') { var m = mostRecentMonday(now); now = new Date(m.getFullYear(), m.getMonth(), m.getDate(), now.getHours(), now.getMinutes()); }
+    return now;
+  }
+  var now = today();
+  var isMonday = now.getDay() === 1;
+
+  function renderHeader() {
+    var h = now.getHours();
+    var greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    var monday = mostRecentMonday(now), sunday = addDays(monday, 6), next = addDays(monday, 7);
+    $('greet').textContent = greet;
+    var t = $('today');
+    t.textContent = fmt(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    t.setAttribute('datetime', now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()));
+    $('pills').innerHTML =
+      '<span class="pill" id="week-pill">' + icon('calendar') + 'Week of ' + esc(fmt(monday, { weekday: 'short', month: 'short', day: 'numeric' })) + '</span>' +
+      '<span class="pill is-soft">Service week ' + isoWeek(monday) + '</span>' +
+      (isMonday ? '<span class="pill is-today" id="today-pill">' + icon('sun') + 'New report today</span>' : '');
+    $('hint').innerHTML = isMonday
+      ? 'It\'s Monday. <b>The new Owner Report is live today.</b> It covers ' + esc(fmt(addDays(monday, -7), { weekday: 'short', month: 'short', day: 'numeric' })) + ' to ' + esc(fmt(addDays(monday, -1), { weekday: 'short', month: 'short', day: 'numeric' })) + '.'
+      : 'Reports cover Monday to Sunday (' + esc(fmt(monday, { month: 'short', day: 'numeric' })) + ' to ' + esc(fmt(sunday, { month: 'short', day: 'numeric' })) + '). Next Owner Report lands <b>' + esc(fmt(next, { weekday: 'long', month: 'short', day: 'numeric' })) + '</b>.';
+    fitGreeting();
+  }
+
+  // Keep the greeting from breaking mid-phrase when the condensed face has not loaded (wider fallback):
+  // "Good evening," always fits one line; on wide screens the whole greeting stays on one line.
+  var greetEl = $('greet-line'), greetFirst = greetEl.querySelector('.g1'), greetLast = greetEl.querySelector('em');
+  function fitGreeting() {
+    greetEl.style.fontSize = '';
+    var size = parseFloat(getComputedStyle(greetEl).fontSize), room = greetEl.clientWidth;
+    var need = window.innerWidth >= 760 ? greetFirst.scrollWidth + greetLast.scrollWidth + size * 0.22 : greetFirst.scrollWidth;
+    if (need > room && room > 0) greetEl.style.fontSize = Math.floor(size * room / need * 0.98) + 'px';
+  }
+  // The wordmark shrinks a little instead of truncating when the fallback face is wider than the condensed one.
+  var brandEl = document.querySelector('.brand h1');
+  function fitBrand() {
+    brandEl.style.fontSize = '';
+    var size = parseFloat(getComputedStyle(brandEl).fontSize), room = brandEl.clientWidth, need = brandEl.scrollWidth;
+    if (need > room && room > 0) brandEl.style.fontSize = Math.max(17, Math.floor(size * room / need * 0.98)) + 'px';
+  }
+  function fitAll() { fitGreeting(); fitBrand(); }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
+  window.addEventListener('resize', fitAll);
+
+  // ---------- state ----------
+  var storedPins = load(KEYS.pins);
+  var pins = Array.isArray(storedPins) ? storedPins.filter(byId) : DEFAULT_PINS.slice();
+  var storedRecent = load(KEYS.recent);
+  var recent = Array.isArray(storedRecent) ? storedRecent.filter(byId) : [];
+  var total = HUB.length;
+  var query = '';
+
+  // ---------- render groups and tiles ----------
+  function groupMeta(name) { for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i].name === name) return GROUPS[i]; return { name: name, layout: 'list', cols: 2, tone: 'neutral' }; }
+  function searchText(item) {
+    return [item.title, item.desc, item.group, (item.badges || []).join(' '), (item.sublinks || []).map(function (s) { return s.label; }).join(' '), hostOf(item.url), item.note || ''].join(' ').toLowerCase();
+  }
+  function badgesHTML(item) {
+    var out = (item.badges || []).map(function (b) { return '<span class="badge ' + (BADGE_TONE[b] || '') + '">' + esc(b) + '</span>'; });
+    if (isMonday && item.id === 'report-nova') out.unshift('<span class="badge t-new">' + icon('sun') + 'New report today</span>');
+    return out.length ? '<span class="badges">' + out.join('') + '</span>' : '';
+  }
+  function actionsHTML(item) {
+    var pinned = pins.indexOf(item.id) !== -1;
+    return '<div class="tile-act">' +
+      '<button type="button" class="act pin" data-act="pin" data-id="' + esc(item.id) + '" aria-pressed="' + pinned + '" aria-label="' + (pinned ? 'Unpin ' : 'Pin ') + esc(item.title) + '">' + icon('star') + '</button>' +
+      '<button type="button" class="act copy" data-act="copy" data-id="' + esc(item.id) + '" aria-label="Copy link to ' + esc(item.title) + '">' + icon('link') + '</button>' +
+      '</div>';
+  }
+  function subsHTML(item) {
+    if (!item.sublinks || !item.sublinks.length) return '';
+    return '<ul class="subs" aria-label="' + esc(item.title) + ' sections"><li class="subs-label" aria-hidden="true">Jump to</li>' + item.sublinks.map(function (s) {
+      return '<li><a href="' + esc(s.url) + '" target="_blank" rel="noopener" data-open="' + esc(item.id) + '">' + esc(s.label) + icon('external') + '</a></li>';
+    }).join('') + '</ul>';
+  }
+  function noteHTML(item) { return item.note ? '<p class="note">' + icon('info') + '<span>' + esc(item.note) + '</span></p>' : ''; }
+  // Seven Mon-Sun pills: days already logged in aqua, today in amber, the rest ahead. Caption is the accessible name.
+  function weekStripHTML() {
+    var names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], daysIn = Math.round((startOfDay(now) - mostRecentMonday(now)) / 864e5), out = '';
+    for (var i = 0; i < 7; i++) out += '<span class="day ' + (i < daysIn ? 'done' : i === daysIn ? 'now' : 'ahead') + '"><i></i>' + names[i] + '</span>';
+    var cap = daysIn === 0 ? 'New week starts today. Last week\'s numbers are in the report.' : daysIn + ' of 7 days logged so far this week. Sunday closes the book.';
+    return '<div class="week" role="img" aria-label="' + esc(cap) + '"><div class="days">' + out + '</div><span class="week-cap">' + esc(cap) + '</span></div>';
+  }
+  // A tiny bar chart with no numbers on it, so nobody reads the demo preview as real.
+  function sampleHTML() {
+    var W = 160, BASE = 40, n = SAMPLE_DAYS.length, gap = 4, bw = (W - gap * (n - 1)) / n, max = Math.max.apply(null, SAMPLE_DAYS), bars = '', labels = '', letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    SAMPLE_DAYS.forEach(function (v, i) {
+      var h = Math.max(2, Math.round(v / max * (BASE - 4))), x = i * (bw + gap);
+      bars += '<rect class="bar' + (v === max ? ' max' : '') + '" x="' + x.toFixed(1) + '" y="' + (BASE - h) + '" width="' + bw.toFixed(1) + '" height="' + h + '" rx="2.5"/>';
+      labels += '<text class="lbl" x="' + (x + bw / 2).toFixed(1) + '" y="50" text-anchor="middle">' + letters[i] + '</text>';
+    });
+    return '<div class="sample" role="img" aria-label="Sample chart. Seven bars for one made-up week, biggest on Thursday. The numbers are not real.">' +
+      '<svg viewBox="0 0 160 52" aria-hidden="true">' + bars + '<line class="base" x1="0" y1="40.5" x2="160" y2="40.5"/>' + labels + '</svg>' +
+      '<span class="sample-cap">What a week looks like in the report.</span><span class="sample-tag">Sample</span></div>';
+  }
+  function heroHTML(item) {
+    var isNova = item.id === 'report-nova', isDemo = item.id === 'report-demo';
+    return '<li class="hero' + (isDemo ? ' is-demo' : '') + (isMonday && isNova ? ' is-new' : '') + '" data-id="' + esc(item.id) + '" data-search="' + esc(searchText(item)) + '">' +
+      '<span class="tile-ico tone-navy" aria-hidden="true">' + icon(item.icon) + '</span>' +
+      '<div class="hero-body">' +
+        '<h3 class="hero-title"><a class="tile-link" href="' + esc(item.url) + '" target="_blank" rel="noopener" data-open="' + esc(item.id) + '">' + esc(item.title) + '<span class="sr"> (opens in a new tab)</span></a></h3>' +
+        '<p class="desc">' + esc(item.desc) + '</p>' +
+        badgesHTML(item) +
+        (isNova ? weekStripHTML() : '') +
+        (isDemo ? sampleHTML() : '') +
+        subsHTML(item) +
+        noteHTML(item) +
+      '</div>' +
+      '<div class="hero-foot"><span class="cta" aria-hidden="true">' + (isDemo ? 'Open demo' : 'Open report') + icon('external') + '</span>' + actionsHTML(item) + '</div>' +
+      '</li>';
+  }
+  function rowHTML(item, tone) {
+    return '<li class="tile" data-id="' + esc(item.id) + '" data-search="' + esc(searchText(item)) + '">' +
+      '<span class="tile-ico tone-' + esc(tone) + '" aria-hidden="true">' + icon(item.icon) + '</span>' +
+      '<div class="tile-head"><a class="tile-link" href="' + esc(item.url) + '" target="_blank" rel="noopener" data-open="' + esc(item.id) + '">' + esc(item.title) + '<span class="sr"> (opens in a new tab)</span></a>' + badgesHTML(item) + '</div>' +
+      actionsHTML(item) +
+      '<div class="tile-body"><p class="desc">' + esc(item.desc) + '</p>' +
+      '<span class="host" title="' + esc(hostOf(item.url)) + '">' + icon('globe') + '<span>' + esc(shortHost(item.url)) + '</span></span>' +
+      noteHTML(item) + subsHTML(item) +
+      '</div></li>';
+  }
+  function renderGroups() {
+    var order = GROUPS.map(function (g) { return g.name; }), map = {};
+    HUB.forEach(function (it) { if (!map[it.group]) { map[it.group] = []; if (order.indexOf(it.group) === -1) order.push(it.group); } map[it.group].push(it); });
+    $('groups').innerHTML = order.filter(function (g) { return map[g]; }).map(function (g) {
+      var meta = groupMeta(g), items = map[g], id = 'g-' + slug(g), hero = meta.layout === 'hero';
+      return '<section class="sec" data-group="' + esc(g) + '" aria-labelledby="' + id + '">' +
+        '<div class="sec-h"><h2 id="' + id + '">' + esc(g) + '</h2><span class="n">' + items.length + (items.length === 1 ? ' link' : ' links') + '</span>' + (meta.blurb ? '<p class="blurb">' + esc(meta.blurb) + '</p>' : '') + '</div>' +
+        (hero ? '<ul class="heroes">' + items.map(heroHTML).join('') + '</ul>'
+              : '<ul class="tiles" data-cols="' + (meta.cols || 2) + '">' + items.map(function (it) { return rowHTML(it, meta.tone || 'neutral'); }).join('') + '</ul>') +
+        '</section>';
+    }).join('');
+  }
+
+  function renderPins() {
+    var list = HUB.filter(function (it) { return pins.indexOf(it.id) !== -1; });
+    $('stubs').innerHTML = list.length ? list.map(function (it) {
+      var tone = it.group === 'Reports' ? 'navy' : (groupMeta(it.group).tone || 'neutral');
+      return '<li class="stub" data-id="' + esc(it.id) + '">' +
+        '<a class="stub-link" href="' + esc(it.url) + '" target="_blank" rel="noopener" data-open="' + esc(it.id) + '">' +
+          '<span class="tile-ico tone-' + tone + '" aria-hidden="true">' + icon(it.icon) + '</span><span class="t">' + esc(it.title) + '</span><span class="sr"> (opens in a new tab)</span></a>' +
+        '<button type="button" class="act pin" data-act="pin" data-id="' + esc(it.id) + '" aria-pressed="true" aria-label="Unpin ' + esc(it.title) + '">' + icon('star') + '</button>' +
+        '</li>';
+    }).join('') : '<li class="stubs-empty">Nothing pinned yet. Tap the star on any link below.</li>';
+    $('pinned-n').textContent = list.length + (list.length === 1 ? ' link' : ' links');
+    document.querySelectorAll('#groups .act.pin').forEach(function (b) {
+      var on = pins.indexOf(b.getAttribute('data-id')) !== -1, it = byId(b.getAttribute('data-id'));
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-label', (on ? 'Unpin ' : 'Pin ') + it.title);
+    });
+  }
+  function renderRecent() {
+    var sec = $('recent');
+    var list = recent.filter(function (id) { return pins.indexOf(id) === -1; });
+    if (!list.length) { sec.hidden = true; return; }
+    $('chips').innerHTML = list.map(function (id) { var it = byId(id); return '<a class="chip" href="' + esc(it.url) + '" target="_blank" rel="noopener" data-open="' + esc(id) + '">' + icon('clock') + esc(it.title) + '</a>'; }).join('');
+    sec.hidden = !!query;
+  }
+
+  // ---------- toast ----------
+  var toastTimer = 0;
+  function toast(msg, ic) {
+    var el = $('toast');
+    el.innerHTML = (ic ? icon(ic) : '') + '<span>' + esc(msg) + '</span>';
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1600);
+  }
+
+  // ---------- pin, copy, open ----------
+  function togglePin(id) {
+    var it = byId(id); if (!it) return;
+    var i = pins.indexOf(id);
+    if (i === -1) pins.push(id); else pins.splice(i, 1);
+    save(KEYS.pins, pins);
+    renderPins();
+    renderRecent();
+    toast((i === -1 ? 'Pinned ' : 'Unpinned ') + it.title, 'star');
+  }
+  function fallbackCopy(text) {
+    var buf = $('copybuf'); buf.value = text; buf.focus({ preventScroll: true }); buf.select();
+    try { buf.setSelectionRange(0, text.length); } catch (e) {}
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    return ok;
+  }
+  function showCopied(btn, ok) {
+    var pop = document.createElement('span');
+    pop.className = 'pop' + (ok ? '' : ' is-bad'); pop.textContent = ok ? 'Copied' : 'Copy failed';
+    btn.classList.add('is-copied');
+    btn.innerHTML = icon(ok ? 'check' : 'link');
+    btn.appendChild(pop);
+    setTimeout(function () { btn.classList.remove('is-copied'); btn.innerHTML = icon('link'); }, 1500);
+  }
+  function copyLink(btn, id) {
+    var it = byId(id); if (!it) return;
+    var done = function (ok) { showCopied(btn, ok); toast(ok ? 'Copied link to ' + it.title : 'Could not copy. Long-press the title to copy its link.', ok ? 'check' : 'info'); btn.focus({ preventScroll: true }); };
+    var fell = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(it.url).then(function () { done(true); }, function () { if (!fell) { fell = true; done(fallbackCopy(it.url)); } });
+    } else {
+      done(fallbackCopy(it.url));
+    }
+  }
+  function noteOpen(id) {
+    if (!byId(id)) return;
+    recent = [id].concat(recent.filter(function (x) { return x !== id; })).slice(0, 5);
+    save(KEYS.recent, recent);
+    renderRecent();
+  }
+  document.addEventListener('click', function (e) {
+    var act = e.target.closest && e.target.closest('[data-act]');
+    if (act) {
+      e.preventDefault();
+      if (act.getAttribute('data-act') === 'pin') togglePin(act.getAttribute('data-id'));
+      if (act.getAttribute('data-act') === 'copy') copyLink(act, act.getAttribute('data-id'));
+      return;
+    }
+    var a = e.target.closest && e.target.closest('a[data-open]');
+    if (a) noteOpen(a.getAttribute('data-open'));
+  });
+  $('clear-recent').addEventListener('click', function () { recent = []; save(KEYS.recent, recent); renderRecent(); });
+
+  // ---------- search ----------
+  var input = $('search'), clearBtn = $('clear'), count = $('count'), status = $('status');
+  function q(s) { return '\u201c' + esc(s) + '\u201d'; }
+  function filter() {
+    var raw = input.value.trim();
+    query = raw.toLowerCase();
+    var terms = query.split(/\s+/).filter(Boolean);
+    var shown = 0;
+    document.querySelectorAll('#groups .sec').forEach(function (sec) {
+      var any = 0;
+      sec.querySelectorAll('[data-search]').forEach(function (t) {
+        var hay = t.getAttribute('data-search');
+        var hit = terms.every(function (w) { return hay.indexOf(w) !== -1; });
+        t.hidden = !hit; if (hit) any++;
+      });
+      sec.hidden = !any; shown += any;
+    });
+    $('pinned').hidden = !!query;
+    renderRecent();
+    $('empty').hidden = shown > 0;
+    clearBtn.hidden = !query;
+    count.textContent = query ? shown + ' of ' + total : total + ' links';
+    status.innerHTML = !query
+      ? 'Try ' + q('report') + ' or ' + q('van') + '. Enter opens the first match.'
+      : shown ? '<b>' + shown + (shown === 1 ? ' match' : ' matches') + '</b> for ' + q(raw) + '. Enter opens the first one.'
+      : 'No matches for ' + q(raw) + '.';
+  }
+  function clearSearch(refocus) { input.value = ''; filter(); if (refocus) input.focus(); }
+  function firstVisibleLink() { return document.querySelector('#groups .sec:not([hidden]) [data-search]:not([hidden]) .tile-link'); }
+  input.addEventListener('input', filter);
+  clearBtn.addEventListener('click', function () { clearSearch(true); });
+  $('empty-clear').addEventListener('click', function () { clearSearch(true); });
+  // Enter opens the first visible link in a new tab through its real anchor, never a popup API. The href is
+  // also written to data-last-open on the input so it can be checked without a popup.
+  $('searchform').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var first = firstVisibleLink();
+    if (!first) { toast('Nothing to open', 'info'); return; }
+    input.setAttribute('data-last-open', first.href);
+    first.click();
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    if (input.value) clearSearch(true); else input.blur();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    e.preventDefault(); input.focus(); input.select();
+  });
+
+  // ---------- ambient water behind the header: caustic blobs and ripples on a low-res canvas ----------
+  var water = (function () {
+    var c = $('water'); if (!c || !c.getContext) return null;
+    var ctx = c.getContext('2d'); if (!ctx) return null;
+    var head = c.parentElement, w = 1, h = 1, raf = 0, t0 = performance.now(), rgb = '11,134,163', rgb2 = '246,166,9';
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function color() { var cs = getComputedStyle(document.documentElement); rgb = cs.getPropertyValue('--caustic').trim() || rgb; rgb2 = cs.getPropertyValue('--caustic-2').trim() || rgb2; }
+    function size() { w = c.width = Math.max(1, Math.round(head.clientWidth * 0.28)); h = c.height = Math.max(1, Math.round(head.clientHeight * 0.28)); }
+    function draw(now) {
+      var t = (now - t0) / 1000;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+      for (var i = 0; i < 4; i++) {
+        var x = w * (0.55 + 0.42 * Math.sin(t * 0.12 * (i + 1) + i * 1.9)), y = h * (0.4 + 0.35 * Math.cos(t * 0.1 * (i + 1) + i * 0.7)), r = Math.max(w, h) * (0.28 + 0.1 * i);
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r), col = i === 3 ? rgb2 : rgb;
+        g.addColorStop(0, 'rgba(' + col + ',' + (i === 3 ? 0.07 : 0.1) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(' + rgb + ',0.16)';
+      for (var k = 0; k < 8; k++) {
+        ctx.beginPath();
+        var base = h * (0.06 + k * 0.12);
+        for (var px = 0; px <= w; px += 3) {
+          var py = base + Math.sin(px * 0.045 + t * 0.8 + k * 1.3) * 4 + Math.sin(px * 0.11 - t * 0.55 + k) * 2;
+          if (px === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+    }
+    function still() { draw(t0 + 4000); }
+    function loop(now) { draw(now); raf = requestAnimationFrame(loop); }
+    function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+    function start() { stop(); size(); color(); if (reduce.matches || document.hidden) still(); else raf = requestAnimationFrame(loop); }
+    window.addEventListener('resize', function () { size(); if (reduce.matches || document.hidden) still(); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else start(); });
+    if (reduce.addEventListener) reduce.addEventListener('change', start);
+    return { start: start, recolor: function () { color(); if (reduce.matches || document.hidden) still(); } };
+  })();
+
+  // ---------- theme ----------
+  var themeBox = $('theme');
+  function applyTheme(mode, persist) {
+    if (mode === 'dark' || mode === 'light') document.documentElement.setAttribute('data-theme', mode);
+    else { mode = 'system'; document.documentElement.removeAttribute('data-theme'); }
+    themeBox.querySelectorAll('label').forEach(function (l) { var r = l.querySelector('input'); r.checked = r.value === mode; l.classList.toggle('is-on', r.value === mode); });
+    if (persist) save(KEYS.theme, mode);
+    if (water) water.recolor();
+  }
+  themeBox.addEventListener('change', function (e) { if (e.target.name === 'theme') applyTheme(e.target.value, true); });
+  // The Artifact viewer (or any host page) may set data-theme on <html> itself; keep the control and the canvas in step.
+  // applyTheme's own attribute writes land here too, but the matching radio is already checked, so they are no-ops.
+  if (window.MutationObserver) new MutationObserver(function () {
+    var a = document.documentElement.getAttribute('data-theme'), mode = (a === 'dark' || a === 'light') ? a : 'system';
+    if (!themeBox.querySelector('input[value="' + mode + '"]').checked) applyTheme(mode, false);
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', function () { if (water) water.recolor(); });
+
+  // ---------- boot ----------
+  renderHeader();
+  fitBrand();
+  renderGroups();
+  renderPins();
+  renderRecent();
+  filter();
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'system', false);
+  if (water) water.start();
+
+  // A tab left open overnight still shows the right greeting, date and Monday state.
+  setInterval(function () {
+    now = today();
+    var monday = now.getDay() === 1;
+    renderHeader();
+    if (monday !== isMonday) { isMonday = monday; renderGroups(); renderPins(); filter(); }
+  }, 60000);
+})();
+</script>
+</body>
+</html>
