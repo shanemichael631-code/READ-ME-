@@ -62,7 +62,7 @@ Data rules worth knowing: revenue is job totals (they include sales tax), parts 
 
 - **Edit links:** the `HUB` array near the top of the script in `hub.html` (look for `EDIT YOUR LINKS HERE`). Each entry has an id, title, one-line description, URL, group, icon name, and optional badges, note and sublinks. `DEFAULT_PINS` sets what a new device sees pinned; `GROUPS` sets group order, blurbs and layout.
 - **What it does:** search filters links as you type (`/` focuses search, Enter opens the first match, Esc clears); star pins a link to the top row, saved per device; copy buttons copy a link to text to a customer; Light / Dark / System theme; a "New report today" marker on the Nova report every Monday; "Week of" and "Service week" computed from the device clock.
-- **Desktop icon:** `nova-hub.ico` is the hub logo as a Windows icon. Make a shortcut to `hub.html`, then Properties, Change Icon, pick this file. On a phone, Add to Home Screen uses the icon built into the page.
+- **Desktop icon:** put `hub.html`, `nova-hub.ico` and `tools/Make Nova Hub Shortcut.cmd` in one folder and double-click the `.cmd`. It copies the files to Documents\Nova Hub and creates a desktop shortcut with the Nova icon. By hand: make a shortcut to `hub.html`, then Properties, Change Icon, pick `nova-hub.ico`. On a phone, Add to Home Screen uses the icon built into the page.
 - **Preview a date:** add `?today=2026-10-12` to the URL to see the Monday state on any day.
 - **Deploy:** upload `hub.html` to the protected Vercel project (`nova-owner-report`) so it sits behind the same sign-in, or to its own project. It never caches offline and makes no requests except Google Fonts (it falls back to system fonts without them).
 
