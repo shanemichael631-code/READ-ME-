@@ -2,11 +2,14 @@
 /*
  * build-jobber-data.js — turn raw Jobber exports into the report's data shape (same as data.js).
  *
- *   node tools/build-jobber-data.js <rawDir> <out.js> [--through YYYY-MM-DD] [--asof YYYY-MM-DD] [--check]
+ *   node tools/build-jobber-data.js <rawDir> <out.js> [--through YYYY-MM-DD] [--asof YYYY-MM-DD] [--settings tech-settings.json] [--check]
  *
  * --through is the last day of data (usually yesterday). The 8 report weeks end on the last full
  * Mon–Sun week on or before it, and the days after that week become "this week so far".
  * --asof (a Monday) overrides the week anchor directly.
+ * --settings is the owner's own notes per tech (kept outside the repo: they're staff schedules), keyed by
+ * the tech's Jobber name: {"techs": {"Jane Doe": {"partTime": true, "note": "until 2 PM", "group": "Service tech"}}}.
+ * partTime = shown but never compared with full-time techs; group overrides the installer/service-tech rule.
  *
  * <rawDir> holds compact JSONL pulled from Jobber (one record per line):
  *   jobs-created-*.jsonl     jobs booked in the 8-week window   {id,n,t,c,d,s,ty,v,cid,cn}
@@ -29,6 +32,7 @@ const OUT = args[1];
 function argOf(name) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; }
 const THROUGH = argOf("--through");
 const CHECK = args.includes("--check");
+const SETTINGS = argOf("--settings") ? JSON.parse(require("fs").readFileSync(argOf("--settings"), "utf8")) : {};
 if (!RAW || !OUT) { console.error("usage: build-jobber-data.js <rawDir> <out.js> [--through YYYY-MM-DD] [--asof YYYY-MM-DD] [--check]"); process.exit(1); }
 
 const WEEKS = 8;
@@ -228,8 +232,14 @@ inWindowDone.forEach((j) => {
 
 const techs = [...techMeta.values()].filter((m) => m.jobs8 > 0).sort((a, b) => b.revenue8 - a.revenue8).map((m) => {
   const installer = m.revenue8 > 0 && m.installRevenue8 / m.revenue8 >= 0.5;
-  return { id: m.id, name: m.name, role: installer ? "Installer" : "Service tech", group: installer ? "Installer" : "Service tech" };
+  const set = (SETTINGS.techs || {})[m.full] || {};
+  const group = set.group || (installer ? "Installer" : "Service tech");
+  const t = { id: m.id, name: m.name, role: group, group };
+  if (set.partTime) t.partTime = true;
+  if (set.note) t.note = String(set.note);
+  return t;
 });
+Object.keys(SETTINGS.techs || {}).forEach((n) => { if (![...techMeta.values()].some((m) => m.full === n)) console.warn("settings: no tech named", JSON.stringify(n), "in the data"); });
 if (inWindowDone.some((j) => j.techId === "office")) techs.push({ id: "office", name: "Office", role: "Closed out by the office", field: false });
 if (inWindowDone.some((j) => j.techId === "unassigned")) techs.push({ id: "unassigned", name: "No tech on record", role: "No visit found in Jobber", field: false });
 

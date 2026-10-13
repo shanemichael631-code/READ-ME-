@@ -176,6 +176,7 @@
       var cbs = callbacks.filter(function (cb) { return cb.techId === t.id; });
       return {
         id: t.id, name: t.name, role: t.role, field: t.field !== false, group: t.group || null,
+        partTime: !!t.partTime, note: t.note || null,
         jobs: s.jobs, revenue: s.revenue, addOns: s.addOns,
         days: val(s, "days"), partWeek: s.days !== undefined && s.days < CONFIG.partWeekDays,
         avgTicket: s.jobs ? s.revenue / s.jobs : 0,
@@ -277,7 +278,7 @@
   // Field techs who worked last week (office / counter rows never count toward averages).
   function activeTechs(cur, group) {
     var pool = fieldTechs(cur.techs).filter(function (t) { return !group || t.group === group; });
-    var a = pool.filter(function (t) { return t.jobs > 0 && !t.partWeek; });
+    var a = pool.filter(function (t) { return t.jobs > 0 && !t.partWeek && !t.partTime; });
     return a.length ? a : pool;
   }
 
@@ -385,7 +386,7 @@
 
   function techFlags(cur, team) {
     return fieldTechs(cur.techs).filter(function (t) {
-      if (!t.jobs || t.partWeek) return false; // out all or part of the week — not a performance problem
+      if (!t.jobs || t.partWeek || t.partTime) return false; // out all or part of the week, or part-time by design
       var p = peerAvg(team, t);
       if (!p) return false; // nobody doing the same kind of work to compare with
       return t.jobs < p.jobs * CONFIG.techBelowAvg || t.revenue < p.revenue * CONFIG.techBelowAvg;
@@ -490,7 +491,8 @@
       });
     }
 
-    techFlags(cur, team).forEach(function (f) {
+    // A tech with fewer but bigger jobs can trip the jobs test with no money lost: not a leak.
+    techFlags(cur, team).filter(function (f) { return f.gap > 0; }).forEach(function (f) {
       items.push({
         kind: "tech",
         title: f.tech.name + " is well below " + (f.tech.group ? "the " : "") + peerLabel(f.tech),
@@ -1327,7 +1329,7 @@
       return (
         '<button type="button" class="lb-row is-link"' + openAttr("tech:" + t.id) + ">" +
         '<span class="lb-rank"><span class="sr">Rank </span>' + (i + 1) + "</span>" +
-        '<span class="lb-name"><span class="lb-av" aria-hidden="true">' + esc(initials(t.name)) + '</span><span><b>' + esc(t.name) + "</b>" + (flagged ? ' <span class="pill">Check in</span>' : "") + '<span class="lb-role">' + esc(t.role) + (t.jobs ? (t.partWeek ? " · part week (" + plural(t.days, "day") + ")" : "") : " · no jobs last week") + "</span>" +
+        '<span class="lb-name"><span class="lb-av" aria-hidden="true">' + esc(initials(t.name)) + '</span><span><b>' + esc(t.name) + "</b>" + (flagged ? ' <span class="pill">Check in</span>' : "") + '<span class="lb-role">' + esc(t.role) + (t.jobs ? (t.partTime ? " · part-time" + (t.note ? " (" + esc(t.note) + ")" : "") : t.partWeek ? " · part week (" + plural(t.days, "day") + ")" : "") : " · no jobs last week") + "</span>" +
         '<span class="lb-bar" aria-hidden="true"><i style="width:' + Math.round((t.revenue / maxRev) * 100) + '%"></i></span></span></span>' +
         '<span class="lb-num lb-rev" data-l="Revenue">' + money(t.revenue) + "</span>" +
         '<span class="lb-num" data-l="Jobs">' + t.jobs + "</span>" +
