@@ -261,8 +261,8 @@ const weeks = weekStarts.map((ws, i) => {
   wDone.forEach((j) => { daily[dow(j.completed)] += j.total; });
   const byTech = new Map();
   wDone.forEach((j) => {
-    const s = byTech.get(j.techId) || { techId: j.techId, jobs: 0, revenue: 0, addOns: 0 };
-    s.jobs += 1; s.revenue += j.total;
+    const s = byTech.get(j.techId) || { techId: j.techId, jobs: 0, revenue: 0, addOns: 0, dates: new Set() };
+    s.jobs += 1; s.revenue += j.total; s.dates.add(j.completed);
     if (j.bucket === "New install" || j.bucket === "Upgrade") s.addOns += 1;
     byTech.set(j.techId, s);
   });
@@ -279,7 +279,7 @@ const weeks = weekStarts.map((ws, i) => {
     revenue: wDone.reduce((s, j) => s + j.total, 0),
     jobsCompleted: wDone.length,
     dailyRevenue: daily,
-    techStats: [...byTech.values()],
+    techStats: [...byTech.values()].map(({ dates, ...s }) => Object.assign(s, { days: dates.size })), // days = days with a completed job
     metrics: {
       booked: booked.length,
       systems: Object.values(sys).reduce((a, b) => a + b, 0),
