@@ -15,6 +15,7 @@
 | `Nova-Phone-Logo_black.pdf` / `.svg` / `.eps` / `_transparent_8000px.png` | 352.566.2649 in black (100% K), same lettering. For light backgrounds |
 | `Nova-Website-Logo_black.pdf` / `.svg` / `.eps` / `_transparent_8000px.png` | NovaFilters.com in black (100% K), same lettering. For light backgrounds |
 | `Nova-Phone-Logo_preview-on-navy.png`, `Nova-Website-Logo_preview-on-navy.png` | Previews only. White logos are hard to see on a white screen |
+| `Nova-Van-Mockup.pdf` / `.png` | The panel at true scale on a generic high-roof cargo van (`van_mockup.py` builds it) |
 | `build_wrap.py` | Generator. Edit `PHONE`, `WEBSITE` and the text lists at the top, then run `python3 build_wrap.py`. |
 
 ## Print file specs (put these in the email to the shop)
