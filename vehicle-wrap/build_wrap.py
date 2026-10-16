@@ -383,40 +383,21 @@ def make_logo(path):
     c.save()
 
 
-def draw_phone_logo(c, x, base, cap, number=PHONE, mono=False, color=WHITE):
-    """Phone number in the logo's lettering; each dot becomes a water drop.
-
-    mono=True draws the drops as solid silhouettes in `color` (for one-color cut vinyl).
-    Returns the total width.
-    """
-    f = ARIAL_BOLD
-    size = cap / (cap_height(f, 1000) / 1000)
-    hw = cap * 0.27          # drop half-width
-    dh = hw * 2.35           # drop height, tip to bottom
-    gap = cap * 0.12
-    parts = number.split(".")
-    for i, part in enumerate(parts):
-        draw_text(c, f, part, x, base, size, color)
-        x += text_width(f, part, size)
-        if i < len(parts) - 1:
-            dcx = x + gap + hw
-            if mono:
-                c.setFillColor(color)
-                c.drawPath(drop_path(c, dcx, base + dh, base, hw), fill=1, stroke=0)
-            else:
-                draw_drop(c, dcx, base + dh, base, hw)
-            x = dcx + hw + gap
-    return x
+def draw_phone_logo(c, x, base, cap, number=PHONE, color=WHITE):
+    """Phone number in the logo's lettering (same bold face as "Nova"). Returns the end x."""
+    size = cap / (cap_height(ARIAL_BOLD, 1000) / 1000)
+    draw_text(c, ARIAL_BOLD, number, x, base, size, color)
+    return x + text_width(ARIAL_BOLD, number, size)
 
 
-def make_phone_logo(path, mono=False):
+def make_phone_logo(path):
     cap = 4 * IN
     m = 0.25 * IN
     probe = NoFontCanvas(os.devnull)
-    w = draw_phone_logo(probe, 0, 0, cap, mono=mono)
+    w = draw_phone_logo(probe, 0, 0, cap)
     c = NoFontCanvas(path, pagesize=(w + 2 * m, cap + 2 * m))
-    c.setTitle("Nova Filters phone logo" + (" (one-color white)" if mono else ""))
-    draw_phone_logo(c, m, m, cap, mono=mono)
+    c.setTitle("Nova Filters phone logo (white)")
+    draw_phone_logo(c, m, m, cap)
     c.showPage()
     c.save()
 
@@ -427,5 +408,4 @@ if __name__ == "__main__":
     make(os.path.join(out, "Nova-Van-Wrap_36x48_PROOF.pdf"), True)
     make_logo(os.path.join(out, "Nova-Filters-Logo.pdf"))
     make_phone_logo(os.path.join(out, "Nova-Phone-Logo_white.pdf"))
-    make_phone_logo(os.path.join(out, "Nova-Phone-Logo_white-1color.pdf"), mono=True)
     print("done")

@@ -9,9 +9,8 @@
 | `Nova-Filters-Logo.svg` | Logo, vector, transparent. For Canva, websites and cutting machines. |
 | `Nova-Filters-Logo.eps` | Logo, vector, transparent. For shops that ask for EPS or Illustrator files. |
 | `Nova-Filters-Logo_transparent_8000px.png` | Logo, 8000 px transparent PNG. For apps that won't take vector files (Amazon, social media, CapCut). |
-| `Nova-Phone-Logo_white.pdf` / `.svg` / `.eps` | Phone number 352.566.2649 in white, with realistic blue drops for the dots. Vector, transparent. For dark backgrounds. |
+| `Nova-Phone-Logo_white.pdf` / `.svg` / `.eps` | Phone number 352.566.2649 in white, same lettering as the logo. Vector, transparent, one color, so it also works for cut vinyl. |
 | `Nova-Phone-Logo_white_transparent_8000px.png` | Same, as an 8000 px transparent PNG |
-| `Nova-Phone-Logo_white-1color.pdf` / `.svg` / `.eps` / `_8000px.png` | All-white version (solid white drops). For cut vinyl, screen printing and embroidery |
 | `Nova-Phone-Logo_preview-on-navy.png` | Preview only. The white logo is hard to see on a white screen |
 | `build_wrap.py` | Generator. Edit `PHONE`, `WEBSITE` and the text lists at the top, then run `python3 build_wrap.py`. |
 
