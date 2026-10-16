@@ -3,7 +3,7 @@
 Builds:
   Nova-Van-Wrap_36x48_PRINT.pdf  - print file: CMYK, all vector, text outlined, 2" bleed, Trim/Bleed boxes set
   Nova-Van-Wrap_36x48_PROOF.pdf  - same art with trim, safe-zone and dimension guides (do not print)
-  Nova-Filters-Logo_vector.pdf   - the rebuilt logo on its own
+  Nova-Filters-Logo.pdf   - the rebuilt logo on its own
 
 Edit CONTACT/SERVICES below and re-run:  python3 build_wrap.py
 """
@@ -316,10 +316,13 @@ def make(path, with_guides):
 
 
 def make_logo(path):
-    w = 27 * IN
-    c = NoFontCanvas(path, pagesize=(w + 2 * IN, w * 1.05 + 2 * IN))
+    """Logo only, transparent (no background), page cropped tight with a 0.25" margin."""
+    w, m = 27 * IN, 0.25 * IN
+    probe = NoFontCanvas(os.devnull)
+    h = draw_logo(probe, 0, 0, w)["h"]
+    c = NoFontCanvas(path, pagesize=(w + 2 * m, h + 2 * m))
     c.setTitle("Nova Filters Logo (vector rebuild)")
-    draw_logo(c, IN, w * 1.05 + IN, w)
+    draw_logo(c, m, h + m, w)
     c.showPage()
     c.save()
 
@@ -328,5 +331,5 @@ if __name__ == "__main__":
     out = os.path.dirname(os.path.abspath(__file__))
     make(os.path.join(out, "Nova-Van-Wrap_36x48_PRINT.pdf"), False)
     make(os.path.join(out, "Nova-Van-Wrap_36x48_PROOF.pdf"), True)
-    make_logo(os.path.join(out, "Nova-Filters-Logo_vector.pdf"))
+    make_logo(os.path.join(out, "Nova-Filters-Logo.pdf"))
     print("done")

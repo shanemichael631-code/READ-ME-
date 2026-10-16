@@ -5,7 +5,10 @@
 | `Nova-Van-Wrap_36x48_PRINT.pdf` | **Send this to the wrap shop.** |
 | `Nova-Van-Wrap_36x48_PROOF.pdf` | Shows the trim line, safe zone and bleed. For review only, never print it. |
 | `Nova-Van-Wrap_36x48_preview.png` | Low-res picture for texting or approval. |
-| `Nova-Filters-Logo_vector.pdf` | The logo rebuilt as vector art, for future signs, shirts and decals. |
+| `Nova-Filters-Logo.pdf` | Logo, vector, CMYK, transparent background. Best file for printers and sign shops. |
+| `Nova-Filters-Logo.svg` | Logo, vector, transparent. For Canva, websites and cutting machines. |
+| `Nova-Filters-Logo.eps` | Logo, vector, transparent. For shops that ask for EPS or Illustrator files. |
+| `Nova-Filters-Logo_transparent_8000px.png` | Logo, 8000 px transparent PNG. For apps that won't take vector files (Amazon, social media, CapCut). |
 | `build_wrap.py` | Generator. Edit `PHONE`, `WEBSITE` and the text lists at the top, then run `python3 build_wrap.py`. |
 
 ## Print file specs (put these in the email to the shop)
