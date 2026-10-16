@@ -15,7 +15,8 @@ from reportlab.lib.colors import CMYKColor
 
 # ---------------- EDIT ME ----------------
 PHONE = "352.566.2649"
-WEBSITE = "YOURWEBSITE.COM"
+WEBSITE = "NOVAFILTERS.COM"
+WEB_LOGO = "NovaFilters.com"
 TAGLINE = "SALES  •  INSTALLATION  •  SERVICE"
 LEFT_STACK = ["SERVING", "CENTRAL", "FLORIDA"]
 RIGHT_STACK = ["WATER", "TREATMENT", "SPECIALISTS"]
@@ -390,14 +391,14 @@ def draw_phone_logo(c, x, base, cap, number=PHONE, color=WHITE):
     return x + text_width(ARIAL_BOLD, number, size)
 
 
-def make_phone_logo(path):
+def make_phone_logo(path, number=PHONE, title="Nova Filters phone logo (white)"):
     cap = 4 * IN
     m = 0.25 * IN
     probe = NoFontCanvas(os.devnull)
-    w = draw_phone_logo(probe, 0, 0, cap)
-    c = NoFontCanvas(path, pagesize=(w + 2 * m, cap + 2 * m))
-    c.setTitle("Nova Filters phone logo (white)")
-    draw_phone_logo(c, m, m, cap)
+    w = draw_phone_logo(probe, 0, 0, cap, number)
+    c = NoFontCanvas(path, pagesize=(w + 2 * m, cap * 1.06 + 2 * m))  # 1.06: lowercase l/t rise above cap height
+    c.setTitle(title)
+    draw_phone_logo(c, m, m, cap, number)
     c.showPage()
     c.save()
 
@@ -408,4 +409,5 @@ if __name__ == "__main__":
     make(os.path.join(out, "Nova-Van-Wrap_36x48_PROOF.pdf"), True)
     make_logo(os.path.join(out, "Nova-Filters-Logo.pdf"))
     make_phone_logo(os.path.join(out, "Nova-Phone-Logo_white.pdf"))
+    make_phone_logo(os.path.join(out, "Nova-Website-Logo_white.pdf"), WEB_LOGO, "Nova Filters website logo (white)")
     print("done")
