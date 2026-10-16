@@ -410,6 +410,8 @@ if __name__ == "__main__":
     make_logo(os.path.join(out, "Nova-Filters-Logo.pdf"))
     make_phone_logo(os.path.join(out, "Nova-Phone-Logo_white.pdf"))
     make_phone_logo(os.path.join(out, "Nova-Website-Logo_white.pdf"), WEB_LOGO, "Nova Filters website logo (white)")
+    make_phone_logo(os.path.join(out, "Nova-Phone-Logo_black.pdf"), PHONE, "Nova Filters phone logo (black)",
+                    CMYKColor(0, 0, 0, 1))
     make_phone_logo(os.path.join(out, "Nova-Website-Logo_black.pdf"), WEB_LOGO, "Nova Filters website logo (black)",
                     CMYKColor(0, 0, 0, 1))
     print("done")

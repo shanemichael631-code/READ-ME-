@@ -12,6 +12,7 @@
 | `Nova-Phone-Logo_white.pdf` / `.svg` / `.eps` | Phone number 352.566.2649 in white, same lettering as the logo. Vector, transparent, one color, so it also works for cut vinyl. |
 | `Nova-Phone-Logo_white_transparent_8000px.png` | Same, as an 8000 px transparent PNG |
 | `Nova-Website-Logo_white.pdf` / `.svg` / `.eps` / `_transparent_8000px.png` | NovaFilters.com in white, same lettering. Vector, transparent, one color |
+| `Nova-Phone-Logo_black.pdf` / `.svg` / `.eps` / `_transparent_8000px.png` | 352.566.2649 in black (100% K), same lettering. For light backgrounds |
 | `Nova-Website-Logo_black.pdf` / `.svg` / `.eps` / `_transparent_8000px.png` | NovaFilters.com in black (100% K), same lettering. For light backgrounds |
 | `Nova-Phone-Logo_preview-on-navy.png`, `Nova-Website-Logo_preview-on-navy.png` | Previews only. White logos are hard to see on a white screen |
 | `build_wrap.py` | Generator. Edit `PHONE`, `WEBSITE` and the text lists at the top, then run `python3 build_wrap.py`. |
