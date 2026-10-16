@@ -9,6 +9,10 @@
 | `Nova-Filters-Logo.svg` | Logo, vector, transparent. For Canva, websites and cutting machines. |
 | `Nova-Filters-Logo.eps` | Logo, vector, transparent. For shops that ask for EPS or Illustrator files. |
 | `Nova-Filters-Logo_transparent_8000px.png` | Logo, 8000 px transparent PNG. For apps that won't take vector files (Amazon, social media, CapCut). |
+| `Nova-Phone-Logo_white.pdf` / `.svg` / `.eps` | Phone number 352.566.2649 in white, with realistic blue drops for the dots. Vector, transparent. For dark backgrounds. |
+| `Nova-Phone-Logo_white_transparent_8000px.png` | Same, as an 8000 px transparent PNG |
+| `Nova-Phone-Logo_white-1color.pdf` / `.svg` / `.eps` / `_8000px.png` | All-white version (solid white drops). For cut vinyl, screen printing and embroidery |
+| `Nova-Phone-Logo_preview-on-navy.png` | Preview only. The white logo is hard to see on a white screen |
 | `build_wrap.py` | Generator. Edit `PHONE`, `WEBSITE` and the text lists at the top, then run `python3 build_wrap.py`. |
 
 ## Print file specs (put these in the email to the shop)
@@ -23,7 +27,7 @@
 
 ## Before you submit
 
-- [ ] Replace the placeholder phone number and website, then re-run the script
+- [ ] Replace the placeholder website, then re-run the script (the phone number is now 352.566.2649)
 - [ ] Confirm the service list and the "Serving Central Florida" line
 - [ ] Approve the rebuilt logo, or send the shop your original vector logo (AI, EPS, SVG or PDF) if you have one
 - [ ] Ask the shop: their bleed requirement (2" is common, some want 3–4"), whether they want 1:1 or 1:10 scale, and if the panel crosses a door seam, handle or body line
