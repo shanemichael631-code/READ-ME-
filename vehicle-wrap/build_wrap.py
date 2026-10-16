@@ -391,14 +391,14 @@ def draw_phone_logo(c, x, base, cap, number=PHONE, color=WHITE):
     return x + text_width(ARIAL_BOLD, number, size)
 
 
-def make_phone_logo(path, number=PHONE, title="Nova Filters phone logo (white)"):
+def make_phone_logo(path, number=PHONE, title="Nova Filters phone logo (white)", color=WHITE):
     cap = 4 * IN
     m = 0.25 * IN
     probe = NoFontCanvas(os.devnull)
-    w = draw_phone_logo(probe, 0, 0, cap, number)
+    w = draw_phone_logo(probe, 0, 0, cap, number, color)
     c = NoFontCanvas(path, pagesize=(w + 2 * m, cap * 1.06 + 2 * m))  # 1.06: lowercase l/t rise above cap height
     c.setTitle(title)
-    draw_phone_logo(c, m, m, cap, number)
+    draw_phone_logo(c, m, m, cap, number, color)
     c.showPage()
     c.save()
 
@@ -410,4 +410,6 @@ if __name__ == "__main__":
     make_logo(os.path.join(out, "Nova-Filters-Logo.pdf"))
     make_phone_logo(os.path.join(out, "Nova-Phone-Logo_white.pdf"))
     make_phone_logo(os.path.join(out, "Nova-Website-Logo_white.pdf"), WEB_LOGO, "Nova Filters website logo (white)")
+    make_phone_logo(os.path.join(out, "Nova-Website-Logo_black.pdf"), WEB_LOGO, "Nova Filters website logo (black)",
+                    CMYKColor(0, 0, 0, 1))
     print("done")
