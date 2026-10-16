@@ -116,36 +116,92 @@ def fit_size(fpath, txt, max_w, max_cap, track=0.0):
     return size * min(1.0, max_w / w)
 
 
-def drop_path(c, cx, tip_y, bottom_y, half_w):
-    """Water drop: point at top, round bottom."""
+def drop_path(c, cx, tip_y, bottom_y, half_w, point=1.0):
+    """Water drop: point at top, round bottom. point=0 morphs it into a circle."""
     r = half_w
     cy = bottom_y + r
     k = 0.5523 * r
+    lerp = lambda a, b: b + (a - b) * point
+    ty = lerp(tip_y, cy + r)
+    c1x, c1y = lerp(r * 0.25, k), lerp(tip_y - (tip_y - cy) * 0.35, cy + r)
+    c2y = lerp(cy + r * 0.85, cy + k)
     p = c.beginPath()
-    p.moveTo(cx, tip_y)
-    p.curveTo(cx + r * 0.25, tip_y - (tip_y - cy) * 0.35, cx + r, cy + r * 0.85, cx + r, cy)
+    p.moveTo(cx, ty)
+    p.curveTo(cx + c1x, c1y, cx + r, c2y, cx + r, cy)
     p.curveTo(cx + r, cy - k, cx + k, cy - r, cx, cy - r)
     p.curveTo(cx - k, cy - r, cx - r, cy - k, cx - r, cy)
-    p.curveTo(cx - r, cy + r * 0.85, cx - r * 0.25, tip_y - (tip_y - cy) * 0.35, cx, tip_y)
+    p.curveTo(cx - r, c2y, cx - c1x, c1y, cx, ty)
     p.close()
     return p
 
 
-def draw_drop(c, cx, tip_y, bottom_y, half_w):
+def _mix(c1, c2, t):
+    return CMYKColor(*[x + (y - x) * t for x, y in zip(
+        (c1.cyan, c1.magenta, c1.yellow, c1.black), (c2.cyan, c2.magenta, c2.yellow, c2.black))])
+
+
+# drop body: rim (t=0) -> core (t=1). Dark edges and a bright core read as water refracting light
+DROP_STOPS = [(0.00, CMYKColor(1.00, 0.72, 0.00, 0.30)),
+              (0.10, CMYKColor(1.00, 0.58, 0.00, 0.08)),
+              (0.40, CMYKColor(0.88, 0.32, 0.00, 0.00)),
+              (0.75, CMYKColor(0.58, 0.06, 0.00, 0.00)),
+              (1.00, CMYKColor(0.28, 0.00, 0.00, 0.00))]
+
+
+def _drop_color(t):
+    for (t0, c0), (t1, c1) in zip(DROP_STOPS, DROP_STOPS[1:]):
+        if t <= t1:
+            return _mix(c0, c1, (t - t0) / (t1 - t0))
+    return DROP_STOPS[-1][1]
+
+
+def draw_drop(c, cx, tip_y, bottom_y, half_w, steps=80):
+    """Realistic water drop, all opaque CMYK vector (no transparency to flatten).
+
+    The body is a stack of nested drop shapes shrinking toward a focal point in the
+    lower half, so the color runs from a dark rim to a bright refracted core.
+    """
     r = half_w
+    fx, fy = cx + r * 0.10, bottom_y + r * 0.62  # where light collects
     c.saveState()
     c.clipPath(drop_path(c, cx, tip_y, bottom_y, half_w), stroke=0, fill=0)
-    c.radialGradient(cx - r * 0.25, bottom_y + r * 1.1, r * 2.2, [SKY, BLUE, CMYKColor(1, 0.55, 0, 0.05)],
-                     positions=[0, 0.55, 1], extend=True)
-    # gloss highlight
-    c.setFillColor(CMYKColor(0.10, 0, 0, 0))
+    for i in range(steps):
+        t = i / (steps - 1)
+        k = 1 - t * 0.985
+        c.setFillColor(_drop_color(t))
+        c.drawPath(drop_path(c, fx + (cx - fx) * k, fy + (tip_y - fy) * k, fy + (bottom_y - fy) * k, r * k,
+                             point=max(0.0, 1 - t * 1.6)), fill=1, stroke=0)
+
+    # thin bright rim along the bottom edge (light bending through the curve)
+    rim = drop_path(c, cx, tip_y, bottom_y, half_w)
+    p2 = drop_path(c, cx - r * 0.025, tip_y + r * 0.03, bottom_y + r * 0.045, r * 0.975)
+    c.setFillColor(CMYKColor(0.62, 0.10, 0.00, 0.00))
+    path = c.beginPath()
+    for sub in (rim, p2):
+        path._code.extend(op for op in sub._code if op != "n")  # drop newpath so both subpaths survive
+    c.drawPath(path, fill=1, stroke=0, fillMode=0)  # even-odd -> crescent
+
+    white = CMYKColor(0, 0, 0, 0)
+    # main specular highlight: curved streak on the upper left
+    c.setFillColor(white)
     hp = c.beginPath()
-    hx, hy = cx - r * 0.42, bottom_y + r * 1.05
-    hp.moveTo(hx, hy + r * 0.75)
-    hp.curveTo(hx - r * 0.28, hy + r * 0.25, hx - r * 0.22, hy - r * 0.35, hx + r * 0.05, hy - r * 0.55)
-    hp.curveTo(hx - r * 0.05, hy - r * 0.2, hx - r * 0.05, hy + r * 0.3, hx, hy + r * 0.75)
+    hx, hy = cx - r * 0.50, bottom_y + r * 1.05
+    hp.moveTo(hx + r * 0.10, hy + r * 0.80)
+    hp.curveTo(hx - r * 0.22, hy + r * 0.40, hx - r * 0.24, hy - r * 0.20, hx - r * 0.02, hy - r * 0.55)
+    hp.curveTo(hx - r * 0.06, hy - r * 0.15, hx - r * 0.02, hy + r * 0.35, hx + r * 0.10, hy + r * 0.80)
     hp.close()
     c.drawPath(hp, fill=1, stroke=0)
+    # small sparkle above the streak
+    c.ellipse(cx - r * 0.40, bottom_y + r * 1.98, cx - r * 0.24, bottom_y + r * 2.20, fill=1, stroke=0)
+    # soft secondary reflection, lower right
+    c.setFillColor(CMYKColor(0.15, 0.00, 0.00, 0.00))
+    sp = c.beginPath()
+    sx, sy = cx + r * 0.55, bottom_y + r * 0.55
+    sp.moveTo(sx + r * 0.22, sy + r * 0.38)
+    sp.curveTo(sx + r * 0.26, sy + r * 0.05, sx + r * 0.10, sy - r * 0.25, sx - r * 0.20, sy - r * 0.36)
+    sp.curveTo(sx + r * 0.02, sy - r * 0.18, sx + r * 0.14, sy + r * 0.05, sx + r * 0.22, sy + r * 0.38)
+    sp.close()
+    c.drawPath(sp, fill=1, stroke=0)
     c.restoreState()
 
 
