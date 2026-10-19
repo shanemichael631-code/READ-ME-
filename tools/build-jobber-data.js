@@ -17,6 +17,7 @@
  *   techjobs-*.jsonl         completed jobs per tech (search_jobs visitsAssignedToUserId) {id,n,tech}
  *   visits-*.jsonl           visits: job id, assignees, completedBy, leak notes {id,j,d,by,un,t,ins}
  *   invoices-*.jsonl         invoices not paid same day + all unpaid {id,n,s,i,u,v,p,b,cid,cn}
+ *                            ({id,n,s:"deleted"} marks one Jobber no longer has)
  *   quotes.jsonl             quotes created in the window       {id,n,t,s,c,sent,view,appr,u,v,cid,cn}
  *
  * Business rules (job title codes, systems, leak causes, test jobs) follow Nova Filters' weekly
@@ -359,7 +360,7 @@ const STALE_DAYS = 365;
 const staleCutoff = addDays(windowEnd, -STALE_DAYS);
 const staleInvoices = [];
 const invoices = invAll.rows.map((x) => {
-  if (["bad_debt", "voided", "draft"].includes(x.s)) return null;
+  if (["bad_debt", "voided", "draft", "deleted"].includes(x.s)) return null; // "deleted": gone from Jobber since an earlier pull
   const issued = etDate(x.i);
   if (!issued || issued > DATA_END) return null;
   const paid = x.s === "paid" ? etDate(x.paidAt || x.u) : null; // paidAt when verified, else last update
