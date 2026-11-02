@@ -1,0 +1,27 @@
+# Smoke test for the live Nova Hub: every file served at the Vercel address must match hub/ in git.
+name: Check live hub
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/gifted-edison-7f7zwz]
+    paths: ['.github/workflows/check-hub.yml', 'hub/**']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare live files with git
+        run: |
+          BASE=https://nova-hub-gvz6r.vercel.app
+          fail=0
+          cd hub
+          for f in index.html manifest.webmanifest apple-touch-icon.png icon-192.png icon-512.png icon-192-maskable.png icon-512-maskable.png; do
+            code=$(curl -sS -o /tmp/live -w '%{http_code}' "$BASE/$f")
+            live=$(sha1sum /tmp/live | cut -c1-40); git=$(sha1sum "$f" | cut -c1-40)
+            if [ "$live" = "$git" ] && [ "$code" = "200" ]; then r=MATCH; else r=DIFF; fail=1; fi
+            echo "$f http=$code live=$live git=$git $r"
+          done
+          echo "--- root ---"
+          curl -sS -o /tmp/root -w 'root http=%{http_code} type=%{content_type}\n' "$BASE/"
+          echo "root sha1=$(sha1sum /tmp/root | cut -c1-40) (index.html git sha1=$(sha1sum index.html | cut -c1-40))"
+          exit $fail
