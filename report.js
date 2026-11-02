@@ -75,6 +75,7 @@
   function withArticle(phrase) { return (/^[aeiou]/i.test(phrase) ? "an " : "a ") + phrase; }
   // "up from 2 a month ago" / "same as a month ago" / "down from 4 a month ago"
   function vsMonthAgo(now, then) { return now > then ? "up from " + then + " a month ago" : now < then ? "down from " + then + " a month ago" : "same as a month ago"; }
+  function vsWeekAgo(now, then, fmt) { return now > then ? "up from " + fmt(then) + " a week ago" : now < then ? "down from " + fmt(then) + " a week ago" : "same as a week ago"; }
   function firstName(name) { return name.split(" ")[0]; }
   function initials(name) {
     return name.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join("").toUpperCase();
@@ -720,7 +721,7 @@
       out.push({
         key: "collections",
         title: big.length ? "Take deposits and card-on-file on big jobs" : "Automate invoice reminders",
-        evidence: money(cur.unpaid30) + " is " + CONFIG.unpaidDays + "+ days late" + (prev ? " (" + (cur.unpaid30 >= prev ? "up" : "down") + " from " + money(prev) + " a week ago)" : "") + "." +
+        evidence: money(cur.unpaid30) + " is " + CONFIG.unpaidDays + "+ days late" + (prev ? " (" + vsWeekAgo(cur.unpaid30, prev, money) + ")" : "") + "." +
           (big.length ? " " + plural(big.length, "invoice") + " over $2,000 make up " + money(bigAmt) + " of it." : ""),
         steps: (big.length ? [
           "Put a 30–50% deposit on every install quote, and don't schedule the job until it clears.",
@@ -977,7 +978,7 @@
         var u = leakOf("unpaid");
         var oldest = u.list[0];
         var unp = find(m.scorecard, function (x) { return x.key === "unpaid30"; });
-        s.push("The problem is collections: " + money(u.amount) + " is sitting in invoices more than " + CONFIG.unpaidDays + " days old" + (unp && unp.prev ? ", up from " + money(unp.prev) + " a week ago" : "") + ".");
+        s.push("The problem is collections: " + money(u.amount) + " is sitting in invoices more than " + CONFIG.unpaidDays + " days old" + (unp && unp.prev ? ", " + vsWeekAgo(unp.value, unp.prev, money) : "") + ".");
         s.push("You're doing the work, then waiting on the money: " + oldest.customer + " is at " + oldest.daysOutstanding + " days.");
       } else if (lead === "callbacks") {
         var cb = callbackTech(m.weeks, m.team);
