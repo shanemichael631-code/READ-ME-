@@ -1,0 +1,1 @@
+{"name":"nova-hub","private":true,"scripts":{"build":"bash build.sh"}}
