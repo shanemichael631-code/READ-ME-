@@ -41,3 +41,17 @@ fs.mkdirSync(path.join(root, 'tools', 'hub-deploy'), { recursive: true });
 fs.writeFileSync(path.join(root, 'tools', 'hub-deploy', 'build.sh'), sh);
 fs.writeFileSync(path.join(root, 'tools', 'hub-deploy', 'package.json'), '{"name":"nova-hub","private":true,"scripts":{"build":"bash build.sh"}}\n');
 console.log('wrote tools/hub-deploy/build.sh and package.json');
+
+// 3. tools/hub-deploy/manifest.json lists every file the orchestrator uploads to Vercel: the server in server/
+//    plus the generated build.sh (listed from tools/hub-deploy/, not as a server file). Each entry carries the
+//    SHA1 and size so the upload can be verified. Deploy files must be pure ASCII: they are typed in by hand.
+const deploy = [['package.json', 'server/package.json'], ['vercel.json', 'server/vercel.json'], ['build.sh', 'tools/hub-deploy/build.sh']];
+['api', 'lib'].forEach((dir) => fs.readdirSync(path.join(root, 'server', dir)).filter((f) => f.endsWith('.js')).sort().forEach((f) => deploy.push([dir + '/' + f, 'server/' + dir + '/' + f])));
+const manifest = deploy.map(([upload, from]) => {
+  const buf = fs.readFileSync(path.join(root, from));
+  if (buf.some((b) => b > 127)) throw new Error(from + ' has non-ASCII bytes; deploy files must be pure ASCII');
+  return { upload, from, sha1: crypto.createHash('sha1').update(buf).digest('hex'), bytes: buf.length };
+});
+fs.writeFileSync(path.join(root, 'tools', 'hub-deploy', 'manifest.json'), JSON.stringify(manifest, null, 1) + '\n');
+const total = manifest.reduce((s, f) => s + f.bytes, 0);
+console.log('wrote tools/hub-deploy/manifest.json:', manifest.length, 'files,', total, 'bytes' + (total > 35000 ? ' (OVER the 35 KB hand-upload budget)' : ''));

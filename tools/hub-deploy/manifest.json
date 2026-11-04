@@ -1,0 +1,62 @@
+[
+ {
+  "upload": "package.json",
+  "from": "server/package.json",
+  "sha1": "c6629a95d69d7d3b5c9f1487b0b5b5978e41d2c0",
+  "bytes": 188
+ },
+ {
+  "upload": "vercel.json",
+  "from": "server/vercel.json",
+  "sha1": "bbbb23cd9d348604ab6014d550c94361c74d56b9",
+  "bytes": 49
+ },
+ {
+  "upload": "build.sh",
+  "from": "tools/hub-deploy/build.sh",
+  "sha1": "36dca4bf5fd31054328dee673b4088e17c593ac1",
+  "bytes": 1022
+ },
+ {
+  "upload": "api/chat.js",
+  "from": "server/api/chat.js",
+  "sha1": "68d84810e09ab4a831dfd0d45d33f0d6a896a17e",
+  "bytes": 2332
+ },
+ {
+  "upload": "api/health.js",
+  "from": "server/api/health.js",
+  "sha1": "2dd9a9516289d31930a9e787b76b9aac6792615d",
+  "bytes": 719
+ },
+ {
+  "upload": "api/needs.js",
+  "from": "server/api/needs.js",
+  "sha1": "e3f28cc99a25f888a47f4a9ca4020beba2750c88",
+  "bytes": 881
+ },
+ {
+  "upload": "lib/auth.js",
+  "from": "server/lib/auth.js",
+  "sha1": "774923aea294462eca6694f9a99a5c81d355457c",
+  "bytes": 3088
+ },
+ {
+  "upload": "lib/brain.js",
+  "from": "server/lib/brain.js",
+  "sha1": "33ef9f8da6e6098b6ba807efc4212d9cf3ace95c",
+  "bytes": 15851
+ },
+ {
+  "upload": "lib/data.js",
+  "from": "server/lib/data.js",
+  "sha1": "51a4ef2a821d06677f408f7146b5bf5ea48068f7",
+  "bytes": 3033
+ },
+ {
+  "upload": "lib/needs.js",
+  "from": "server/lib/needs.js",
+  "sha1": "3db87c909bb641fa2a0acf6b7f4eea7572ffaf3c",
+  "bytes": 4867
+ }
+]

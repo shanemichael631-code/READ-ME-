@@ -1,10 +1,12 @@
-# Smoke test for the live Nova Hub: every file served at the Vercel address must match hub/ in git.
+# Smoke test for the live Nova Hub: every static file served at the Vercel address must match hub/ in git,
+# and the Ask Nova functions must answer. Secrets never appear here: the passcode check runs only when the
+# repository secret HUB_PASSCODE is set, and the job prints nothing sensitive.
 name: Check live hub
 on:
   workflow_dispatch:
   push:
     branches: [claude/gifted-edison-7f7zwz]
-    paths: ['.github/workflows/check-hub.yml', 'hub/**']
+    paths: ['.github/workflows/check-hub.yml', 'hub/**', 'server/**', 'tools/hub-deploy/**']
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -24,4 +26,33 @@ jobs:
           echo "--- root ---"
           curl -sS -o /tmp/root -w 'root http=%{http_code} type=%{content_type}\n' "$BASE/"
           echo "root sha1=$(sha1sum /tmp/root | cut -c1-40) (index.html git sha1=$(sha1sum index.html | cut -c1-40))"
+          exit $fail
+      - name: Check the Ask Nova functions
+        env:
+          HUB_PASSCODE: ${{ secrets.HUB_PASSCODE }}
+        run: |
+          BASE=https://nova-hub-gvz6r.vercel.app
+          fail=0
+          echo "--- /api/health without a passcode (expect 401 + JSON error + CORS) ---"
+          code=$(curl -sS -D /tmp/h1 -o /tmp/b1 -w '%{http_code}' "$BASE/api/health")
+          echo "http=$code body=$(head -c 200 /tmp/b1)"
+          grep -qi '^access-control-allow-origin: \*' /tmp/h1 || { echo 'missing CORS header'; fail=1; }
+          [ "$code" = "401" ] && grep -q '"bad_passcode"' /tmp/b1 || fail=1
+          echo "--- OPTIONS /api/chat preflight (expect 204 + x-hub-pass allowed) ---"
+          code=$(curl -sS -D /tmp/h2 -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://example.com' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type, x-hub-pass' "$BASE/api/chat")
+          echo "http=$code"
+          [ "$code" = "204" ] || fail=1
+          grep -qi 'x-hub-pass' /tmp/h2 || { echo 'preflight does not allow x-hub-pass'; fail=1; }
+          echo "--- POST /api/chat with a wrong passcode (expect 401) ---"
+          code=$(curl -sS -o /tmp/b3 -w '%{http_code}' -X POST -H 'content-type: application/json' -H 'x-hub-pass: not-the-passcode' --data '{"messages":[{"role":"user","content":"hi"}]}' "$BASE/api/chat")
+          echo "http=$code body=$(head -c 200 /tmp/b3)"
+          [ "$code" = "401" ] || fail=1
+          if [ -n "$HUB_PASSCODE" ]; then
+            echo "--- /api/health with the passcode (expect 200; ok is false until the Anthropic key is set) ---"
+            code=$(curl -sS -o /tmp/b4 -w '%{http_code}' -H "x-hub-pass: $HUB_PASSCODE" "$BASE/api/health")
+            echo "http=$code body=$(head -c 400 /tmp/b4)"
+            [ "$code" = "200" ] && grep -q '"engineOk":true' /tmp/b4 && grep -q '"hasData":true' /tmp/b4 || fail=1
+          else
+            echo "(repository secret HUB_PASSCODE not set: skipping the signed-in health check)"
+          fi
           exit $fail
