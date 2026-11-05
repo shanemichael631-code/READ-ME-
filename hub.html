@@ -358,11 +358,16 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
 .sheet-h .n { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .sheet-h .act[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
 .sheet-b { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-.sheet-f { display: flex; align-items: center; justify-content: space-between; gap: 0 4px; padding: 2px 6px 2px 14px; border-top: 1px solid var(--line-2); font-size: 13px; color: var(--muted); flex: none; }
-.sheet-f .meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-f { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 4px; padding: 2px 6px 2px 14px; border-top: 1px solid var(--line-2); font-size: 13px; color: var(--muted); flex: none; }
+.sheet-f .meta { flex: 1 1 100%; min-width: 0; line-height: 1.35; padding: 6px 0 0; }
+.sheet-f .meta:empty { display: none; }
+.sheet-f .link-btn:first-of-type { margin-left: auto; }
+@media (min-width: 720px) { .sheet-f { flex-wrap: nowrap; } .sheet-f .meta { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0; } }
 .sheet-f .link-btn { min-height: 44px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
 .sheet-f .link-btn:hover { background: var(--accent-soft); }
 .sheet.is-locked .lockable { display: none !important; }
+.sheet.is-ask.is-locked { height: auto; }
+.sheet.is-locked .sheet-f { display: none; }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 10px; background: var(--ink); color: var(--sheet); font-weight: 600; font-size: 15px; white-space: nowrap; text-decoration: none; }
 .btn.ghost { background: var(--sheet); color: var(--ink); border: 1px solid var(--line); }
@@ -925,13 +930,20 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     if (a) { noteOpen(a.getAttribute('data-open')); appOpen(e, a); }
   });
   // On a phone, a main link with appUrl tries the native app first; if the page is still visible 1.2 s later, nothing
-  // took over, so it goes to the web page instead (same tab, since a late popup would be blocked).
+  // took over, so it goes to the web page instead (same tab, since a late popup would be blocked). Once the app has the
+  // screen the timer is cancelled, and a timer the browser held while suspended is ignored, so coming back to the hub
+  // never swaps the tab for the web page.
   function appOpen(e, a) {
     var it = byId(a.getAttribute('data-open'));
     if (!it || !it.appUrl || a.getAttribute('href') !== it.url || !window.matchMedia('(pointer: coarse)').matches) return;
     e.preventDefault();
+    var t0 = Date.now(), timer;
+    function cancel() { clearTimeout(timer); }
+    document.addEventListener('visibilitychange', cancel, { once: true });
+    window.addEventListener('pagehide', cancel, { once: true });
+    window.addEventListener('blur', cancel, { once: true });
     location.href = it.appUrl;
-    setTimeout(function () { if (!document.hidden) location.href = it.url; }, 1200);
+    timer = setTimeout(function () { if (!document.hidden && Date.now() - t0 < 2000) location.href = it.url; }, 1200);
   }
   $('clear-recent').addEventListener('click', function () { recent = []; save(KEYS.recent, recent); renderRecent(); });
 
@@ -1075,7 +1087,7 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
   var turns = (load(KEYS.chat) || []).filter(function (t) { return t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string'; });
   var dismissed = load(KEYS.dismissed) || {}, reminders = (load(KEYS.reminders) || []).filter(function (r) { return r && r.id && r.text; });
   var needsItems = [], needsAsOf = '', needsErr = null, checked = 0, lastFetch = 0, lastCount = null, seenIds = null;
-  var sheet = null, opener = null, busy = false, chatErr = null, primed = false, rec = null;
+  var sheet = null, opener = null, busy = false, chatErr = null, chatGen = 0, primed = false, rec = null;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   function isoDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -1132,7 +1144,10 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     e.preventDefault();
     var v = $('pass').value.trim(), go = $('gate-go'); if (!v || go.disabled) return;
     pass = v; go.disabled = true;
-    api('/api/health').then(function () { save(KEYS.pass, v); if (sheet) unlock(sheet); fetchNeeds(true); }, function (err) { pass = null; $('gate-err').textContent = err.message; $('gate-err').hidden = false; }).then(function () { go.disabled = false; });
+    api('/api/health').then(function () {
+      save(KEYS.pass, v); if (sheet) unlock(sheet); fetchNeeds(true);
+      if (sheet === ask && !busy && turns.length && turns[turns.length - 1].role === 'user') sendTurns(false);
+    }, function (err) { pass = null; $('gate-err').textContent = err.message; $('gate-err').hidden = false; }).then(function () { go.disabled = false; });
   });
   scrim.addEventListener('click', function () { closeSheet(); });
   $('ask-btn').addEventListener('click', function () { prime(); openSheet(ask, this); });
@@ -1169,7 +1184,7 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     if (!pass || (!force && Date.now() - lastFetch < 60000)) return;
     lastFetch = Date.now();
     if (sheet === needs) $('needs-meta').textContent = 'Checking...';
-    api('/api/needs').then(function (j) {
+    api('/api/needs?today=' + isoDate(now)).then(function (j) {
       needsItems = Array.isArray(j.items) ? j.items : []; needsAsOf = j.asOf || ''; needsErr = null; checked = Date.now(); syncNeeds(true);
     }, function (e) { if (e.code !== 'bad_passcode') { needsErr = e.message; renderNeeds(); } });
   }
@@ -1264,13 +1279,15 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     sendTurns(byVoice);
   }
   function sendTurns(byVoice) {
+    var gen = ++chatGen;
     busy = true; chatErr = null; renderMsgs();
     api('/api/chat', { messages: turns.map(function (t) { return { role: t.role, content: t.content }; }), voice: !!byVoice, today: isoDate(now) }).then(function (j) {
+      if (gen !== chatGen) return;
       pushTurn({ role: 'assistant', content: String(j.reply || ''), actions: Array.isArray(j.actions) ? j.actions : [], at: Date.now() });
       if (Array.isArray(j.needs)) { needsItems = j.needs; checked = Date.now(); syncNeeds(true); }
       if (byVoice && voicePref !== true && voicePref !== false) setVoice(true, false);
       if (voiceOn && j.speak) speak(String(j.speak));
-    }, function (e) { if (e.code !== 'bad_passcode') chatErr = e.message; }).then(function () { busy = false; renderMsgs(); });
+    }, function (e) { if (gen === chatGen && e.code !== 'bad_passcode') chatErr = e.message; }).then(function () { if (gen !== chatGen) return; busy = false; renderMsgs(); });
   }
   function addReminder(ref) {
     var p = ref.split(':'), a = null;
@@ -1281,7 +1298,7 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     syncNeeds(false); renderMsgs(); toast('Added to Needs you', 'bell');
   }
   $('ask-form').addEventListener('submit', function (e) { e.preventDefault(); prime(); send(askIn.value, false); });
-  $('new-chat').addEventListener('click', function () { turns = []; chatErr = null; save(KEYS.chat, turns); renderMsgs(); askIn.focus(); });
+  $('new-chat').addEventListener('click', function () { chatGen++; busy = false; turns = []; chatErr = null; save(KEYS.chat, turns); renderMsgs(); askIn.focus(); });
 
   // ---- voice: speechSynthesis for replies, SpeechRecognition for tap-to-talk ----
   function hush() { try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {} }

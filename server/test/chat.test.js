@@ -53,12 +53,16 @@ test('anything else echoes, and history with assistant turns is accepted', async
 
 test('input validation -> 400 bad_request', async () => {
   const bad = [{}, { messages: [] }, { messages: 'hi' }, { messages: [{ role: 'system', content: 'x' }] }, { messages: [{ role: 'user', content: '' }] },
-    { messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] }, { messages: [{ role: 'user' }] }, 'not json'];
+    { messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] }, { messages: [{ role: 'user' }] }, 'not json', null, [], 'null', '[1]', '"str"'];
   for (const body of bad) {
     const r = await chat(body);
     assert.equal(r.status, 400, JSON.stringify(body));
-    assert.equal((await r.json()).error.code, 'bad_request');
+    const e = (await r.json()).error;
+    assert.equal(e.code, 'bad_request');
+    assert.ok(!/Cannot read|Unexpected token|JSON at position/.test(e.message), e.message);
   }
+  assert.equal((await (await chat('not json')).json()).error.message, 'body must be valid JSON');
+  assert.equal((await (await chat('null')).json()).error.message, 'body must be a JSON object');
 });
 
 test('without MOCK_MODEL a placeholder key -> 503 not_configured', async () => {

@@ -51,7 +51,6 @@ export function makeTools({ company: c, report: m, Engine }, actions) {
     const a = w.techs.filter((t) => t.field && t.jobs), n = a.length || 1;
     return { techs: a.length, jobs: Math.round(a.reduce((s, t) => s + t.jobs, 0) / n), revenue: Math.round(a.reduce((s, t) => s + t.revenue, 0) / n) };
   };
-  const show = (t, v) => (v === null || v === undefined ? null : t.def.fmt ? t.def.fmt(v) : v);
   const def = (name, description, properties, required, run, strict = true) => betaTool({
     name, description, strict,
     inputSchema: { type: 'object', properties, required, additionalProperties: false },
@@ -67,12 +66,12 @@ export function makeTools({ company: c, report: m, Engine }, actions) {
         unpaid30: w.unpaid30, callbacks: w.callbacks, newLeads: w.newLeads, newReviews: w.newReviews, ...(c.weeks[w.index].metrics || {}),
       };
       if (p) out.vsPriorWeek = { revenue: pct((w.revenue - p.revenue) / (p.revenue || 1)), jobs: w.jobs - p.jobs };
-      if (w === m.cur) out.scorecard = m.scorecard.map((t) => ({ label: t.label, value: show(t, t.value), weekBefore: show(t, t.prev), fourWeekAvg: show(t, t.avg4), tone: t.tone }));
+      if (w.index === m.cur.index) out.scorecard = m.scorecard.map((t) => ({ label: t.label, value: t.text[0], weekBefore: t.text[1], fourWeekAvg: t.text[2], tone: t.tone }));
       return out;
     }),
     def('tech_leaderboard', 'Per-tech jobs, revenue, average ticket and callbacks for one week, ranked by revenue, with the team average and who the report flags as below it.', ago, ['weeks_ago'], ({ weeks_ago }) => {
       const w = week(weeks_ago);
-      const flagged = w === m.cur ? m.leaks.items.filter((x) => x.kind === 'tech').map((x) => x.flag.tech.id) : [];
+      const flagged = w.index === m.cur.index ? m.leaks.items.filter((x) => x.kind === 'tech').map((x) => x.flag.tech.id) : [];
       const techs = w.techs.filter((t) => t.jobs || t.field).sort((a, b) => b.revenue - a.revenue).map((t) => ({
         name: t.name, role: t.role, group: t.group || undefined, jobs: t.jobs, revenue: t.revenue, avgTicket: Math.round(t.avgTicket),
         callbacks: t.callbacks, belowAverage: flagged.includes(t.id) || undefined,
@@ -152,16 +151,19 @@ function split(out) {
   return { reply: reply || speak, speak };
 }
 
+// One deadline for the whole tool loop, inside Vercel's 60 s: 20 s per request, one retry, 50 s in all
+// (NOVA_DEADLINE_MS shortens it for tests). An unsupported ANTHROPIC_EFFORT falls back to low.
+const effort = () => (['low', 'medium', 'high'].includes(process.env.ANTHROPIC_EFFORT) ? process.env.ANTHROPIC_EFFORT : 'low');
 async function live(ctx, messages, tools) {
-  const runner = new Anthropic({ timeout: 45000, maxRetries: 1 }).beta.messages.toolRunner({
+  const runner = new Anthropic({ timeout: 20000, maxRetries: 1 }).beta.messages.toolRunner({
     model: modelName(),
-    max_tokens: 1500,
+    max_tokens: 4000,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
-    output_config: { effort: process.env.ANTHROPIC_EFFORT || 'low' },
+    output_config: { effort: effort() },
     system: [{ type: 'text', text: systemPrompt(ctx.company), cache_control: { type: 'ephemeral' } }],
     tools, messages, max_iterations: 6, thread: false,
-  });
+  }, { signal: AbortSignal.timeout(Number(process.env.NOVA_DEADLINE_MS) || 50000) });
   const usage = { input: 0, output: 0 };
   let last;
   for await (const msg of runner) {

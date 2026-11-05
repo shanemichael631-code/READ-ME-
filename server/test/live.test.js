@@ -11,7 +11,9 @@ const fake = http.createServer((req, res) => {
   req.on('data', (d) => { s += d; }).on('end', () => {
     const body = JSON.parse(s);
     calls.push({ headers: req.headers, body });
-    const [status, out] = script.shift()(body);
+    const next = script.shift()(body);
+    if (!next) return; // a hung upstream: the socket stays open until the test closes it
+    const [status, out] = next;
     res.statusCode = status;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify(out));
@@ -23,7 +25,7 @@ process.env.ANTHROPIC_API_KEY = 'sk-ant-fake';
 process.env.MOCK_MODEL = '0';
 process.env.HUB_PASSCODE = 'test';
 const s = await start();
-after(() => { fake.close(); return s.close(); });
+after(() => { fake.closeAllConnections(); fake.close(); return s.close(); });
 
 const msg = (content, stop_reason, usage) => [200, { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content, stop_reason, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 20, ...usage } }];
 const toolUse = (name, input) => msg([{ type: 'tool_use', id: 'toolu_' + calls.length, name, input }], 'tool_use', { cache_creation_input_tokens: 500 });
@@ -50,7 +52,7 @@ test('tool loop: the request carries the documented params and the tool result f
   assert.ok(headers['x-api-key'] === 'sk-ant-fake' || headers.authorization === 'Bearer sk-ant-fake', 'key sent');
   assert.match(headers['anthropic-beta'], /server-side-fallback-2026-07-01/);
   assert.equal(body.model, 'claude-opus-5-5');
-  assert.equal(body.max_tokens, 1500);
+  assert.equal(body.max_tokens, 4000);
   assert.equal(body.fallbacks, 'default');
   assert.deepEqual(body.output_config, { effort: 'low' });
   assert.equal(body.thinking, undefined);
@@ -100,4 +102,28 @@ test('a rejected key -> 503 not_configured; another API error -> 502 upstream, n
   const e = (await r.json()).error;
   assert.equal(e.code, 'upstream');
   assert.ok(!/bad effort|at /.test(e.message));
+});
+
+test('ANTHROPIC_EFFORT is validated: medium passes through, anything unsupported falls back to low', async () => {
+  for (const [set, want] of [['medium', 'medium'], ['high', 'high'], ['xhigh', 'low'], ['LOW', 'low'], ['', 'low']]) {
+    process.env.ANTHROPIC_EFFORT = set;
+    calls.length = 0;
+    script = [() => msg([{ type: 'text', text: 'ok\nSPEAK: ok' }], 'end_turn')];
+    assert.equal((await chat('hi')).status, 200);
+    assert.deepEqual(calls[0].body.output_config, { effort: want }, set);
+  }
+  delete process.env.ANTHROPIC_EFFORT;
+});
+
+test('a hung upstream hits the whole-call deadline and becomes 502 upstream with the friendly message', async () => {
+  process.env.NOVA_DEADLINE_MS = '1500';
+  script = [() => null];
+  const t0 = Date.now();
+  const r = await chat('How was last week?');
+  delete process.env.NOVA_DEADLINE_MS;
+  assert.equal(r.status, 502);
+  const e = (await r.json()).error;
+  assert.equal(e.code, 'upstream');
+  assert.match(e.message, /took too long/);
+  assert.ok(Date.now() - t0 < 10000, 'answered at the deadline, not after the 20 s request timeout');
 });

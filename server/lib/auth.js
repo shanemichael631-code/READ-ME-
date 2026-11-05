@@ -54,8 +54,9 @@ export async function guard(req, res, opts = {}) {
 }
 
 // JSON body: Vercel parses it into req.body; the dev harness and tests hand over the raw stream.
+const parse = (s) => { try { return JSON.parse(s); } catch { throw new Error('body must be valid JSON'); } };
 export async function readBody(req) {
-  if (req.body !== undefined) return typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  if (req.body !== undefined) return typeof req.body === 'string' ? parse(req.body) : req.body;
   const chunks = [];
   let size = 0;
   for await (const c of req) {
@@ -63,5 +64,5 @@ export async function readBody(req) {
     if (size > 65536) throw new Error('body too large');
     chunks.push(c);
   }
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+  return chunks.length ? parse(Buffer.concat(chunks).toString('utf8')) : {};
 }

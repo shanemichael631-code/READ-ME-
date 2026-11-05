@@ -5,6 +5,7 @@ import { ask } from '../lib/brain.js';
 
 // The client sends the last 12 turns; history must start and end with the user.
 function clean(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('body must be a JSON object');
   const list = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
   if (!list.length) throw new Error('messages must be a non-empty array');
   const messages = list.map((t) => {
@@ -35,6 +36,7 @@ export default async function handler(req, res) {
     console.error('chat: model call failed:', e.status || '', e.message);
     if (e instanceof Anthropic.AuthenticationError) return fail(res, 503, 'not_configured', 'The Anthropic key was rejected. Check it in Vercel.');
     if (e instanceof Anthropic.RateLimitError) return fail(res, 502, 'upstream', 'Nova is busy right now. Try again in a minute.');
+    if (e instanceof Anthropic.APIUserAbortError || e instanceof Anthropic.APIConnectionTimeoutError) return fail(res, 502, 'upstream', 'Nova took too long on that one. Try a shorter question.');
     fail(res, 502, 'upstream', 'Nova could not get an answer right now. Try again in a moment.');
   }
 }

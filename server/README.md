@@ -16,14 +16,17 @@ Every request needs the `x-hub-pass` header. Errors are `{error: {code, message}
 | `HUB_PASSCODE` | The team passcode. Change it here; everyone types the new one on next use. |
 | `ANTHROPIC_API_KEY` | Claude API key. Missing or `REPLACE_ME` means `setup:key` in Needs you and 503 on chat. |
 | `ANTHROPIC_MODEL` | Model id, default `claude-opus-5-5`. |
-| `ANTHROPIC_EFFORT` | `low` (default), `medium`, `high`, `xhigh` or `max`. |
+| `ANTHROPIC_EFFORT` | `low` (default), `medium` or `high`; anything else falls back to `low`. |
 | `REPORT_DATA_URL` | The private live `data.js` (served by `nova-owner-report`); a disk path or `file:` URL also works. |
-| `REPORT_BYPASS_SECRET` | Sent as `x-vercel-protection-bypass` when fetching `REPORT_DATA_URL`. |
+| `REPORT_BYPASS_SECRET` | Sent as `x-vercel-protection-bypass` to `REPORT_DATA_URL` only: the URL must be https and a redirect is refused, so the secret never reaches another origin. |
 | `REPORT_ENGINE_URL` | `report.js`, a GitHub raw URL pinned to a commit. Never shipped in the deploy. |
+| `REPORT_ENGINE_SHA256` | Optional. When set, the fetched `report.js` must hash to it (`sha256sum report.js`, hex) or the engine is refused (`setup:data`). Update it with `REPORT_ENGINE_URL`. |
 | `MOCK_MODEL` | `1` = fake model for local tests (no key needed). Leave unset in production. |
 
-Data and engine are cached in module scope for 10 minutes. Rate limits (10 bad passcodes per 15 min,
-20 chats per 5 min, per IP) are in-memory and best effort.
+Data and engine are cached in module scope for 10 minutes. Both files run in an empty `vm` context (no host
+objects, no `eval`/`Function`) and only JSON comes back out. Rate limits (10 bad passcodes per 15 min,
+20 chats per 5 min, per IP) are in-memory and best effort. The model call has one 50 s deadline (20 s per
+request, one retry, `max_tokens` 4000) so a stalled upstream answers `502 upstream` inside Vercel's 60 s.
 
 ## Local run
 

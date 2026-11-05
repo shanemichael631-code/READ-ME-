@@ -1,5 +1,6 @@
 // Report data and the report Engine, fetched on demand and cached in module scope for 10 minutes.
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -14,11 +15,13 @@ export class ConfigError extends Error {
 export const hasKey = () => { const k = process.env.ANTHROPIC_API_KEY; return !!k && k !== 'REPLACE_ME'; };
 
 // http(s) URLs are fetched; anything else (a disk path or a file: URL) is read locally for the dev harness.
-async function fetchText(url, headers) {
+// The bypass secret only ever reaches the exact origin in REPORT_DATA_URL: https only, and no redirect is followed.
+async function fetchText(url, secret) {
   if (!url) throw new ConfigError('URL not set');
   if (!/^https?:/.test(url)) return readFile(url.startsWith('file:') ? fileURLToPath(url) : path.resolve(url), 'utf8');
-  const res = await fetch(url, { headers, cache: 'no-store', signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new ConfigError('HTTP ' + res.status);
+  if (secret && !url.startsWith('https:')) throw new ConfigError('REPORT_DATA_URL must be https when REPORT_BYPASS_SECRET is set');
+  const res = await fetch(url, { headers: secret ? { 'x-vercel-protection-bypass': secret } : {}, cache: 'no-store', redirect: 'manual', signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new ConfigError((res.status < 400 ? 'redirect refused, HTTP ' : 'HTTP ') + res.status);
   return res.text();
 }
 
@@ -35,28 +38,39 @@ async function cached(key, load) {
 }
 export const resetCache = () => { for (const k of Object.keys(cache)) delete cache[k]; };
 
-// data.js does `window.REPORT_DATA = {...}`; run it in a bare context and copy the object out.
+// Fetched code runs in an empty context: no host objects go in, eval/Function are off, and results come out as
+// JSON only. The returned function evaluates an expression there, or calls one with JSON-encoded arguments.
+function sandbox(code, prelude = '') {
+  const ctx = vm.createContext(Object.create(null), { codeGeneration: { strings: false, wasm: false } });
+  vm.runInContext('var window = {}, module = { exports: {} }, console = { log() {}, warn() {}, error() {} };', ctx);
+  vm.runInContext(code, ctx, { timeout: 5000 });
+  vm.runInContext(prelude, ctx);
+  return (expr, ...args) => {
+    const out = vm.runInContext('JSON.stringify(' + (args.length ? expr + '(...' + JSON.stringify(args) + ')' : expr) + ')', ctx, { timeout: 5000 });
+    return out === undefined ? null : JSON.parse(out);
+  };
+}
+
+// data.js does `window.REPORT_DATA = {...}` (not plain JSON: the live file has unquoted keys), so it is executed.
 export function loadData() {
   return cached('data', async () => {
-    const secret = process.env.REPORT_BYPASS_SECRET;
-    const code = await fetchText(process.env.REPORT_DATA_URL, secret ? { 'x-vercel-protection-bypass': secret } : {});
-    const sandbox = { window: {} };
-    vm.runInNewContext(code, sandbox, { timeout: 5000 });
-    const data = JSON.parse(JSON.stringify(sandbox.window.REPORT_DATA || null));
+    const code = await fetchText(process.env.REPORT_DATA_URL, process.env.REPORT_BYPASS_SECRET);
+    const data = sandbox(code)('window.REPORT_DATA');
     if (!data?.meta?.asOf || !Array.isArray(data.companies?.[0]?.weeks)) throw new ConfigError('report data has an unexpected shape');
     return data;
   });
 }
 
 // report.js ends with `module.exports = Engine` when a module object exists; it never touches the DOM at load.
+// Scorecard tiles format through functions, which cannot cross the boundary, so their text is rendered inside.
 export function loadEngine() {
   return cached('engine', async () => {
     const code = await fetchText(process.env.REPORT_ENGINE_URL);
-    const sandbox = { window: {}, module: { exports: {} }, console };
-    vm.runInNewContext(code, sandbox, { timeout: 5000 });
-    const Engine = sandbox.module.exports;
-    if (typeof Engine?.buildReport !== 'function') throw new ConfigError('report engine did not export buildReport');
-    return Engine;
+    const pin = (process.env.REPORT_ENGINE_SHA256 || '').toLowerCase();
+    if (pin && createHash('sha256').update(code).digest('hex') !== pin) throw new ConfigError('report engine does not match REPORT_ENGINE_SHA256');
+    const run = sandbox(code, 'var report = (c, d) => { var m = module.exports.buildReport(c, d); (m.scorecard || []).forEach((t) => { t.text = [t.value, t.prev, t.avg4].map((v) => (v == null ? null : t.def.fmt ? t.def.fmt(v) : v)); }); return m; };');
+    if (run('typeof module.exports.buildReport') !== 'function') throw new ConfigError('report engine did not export buildReport');
+    return { CONFIG: run('module.exports.CONFIG'), daysBetween: (a, b) => run('module.exports.daysBetween', a, b), buildReport: (company, asOf) => run('report', company, asOf) };
   });
 }
 

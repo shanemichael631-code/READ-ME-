@@ -39,8 +39,8 @@ const sh = [
 ].join('\n');
 fs.mkdirSync(path.join(root, 'tools', 'hub-deploy'), { recursive: true });
 fs.writeFileSync(path.join(root, 'tools', 'hub-deploy', 'build.sh'), sh);
-fs.writeFileSync(path.join(root, 'tools', 'hub-deploy', 'package.json'), '{"name":"nova-hub","private":true,"scripts":{"build":"bash build.sh"}}\n');
-console.log('wrote tools/hub-deploy/build.sh and package.json');
+fs.copyFileSync(path.join(root, 'server', 'package.json'), path.join(root, 'tools', 'hub-deploy', 'package.json'));
+console.log('wrote tools/hub-deploy/build.sh and copied server/package.json next to it');
 
 // 3. tools/hub-deploy/manifest.json lists every file the orchestrator uploads to Vercel: the server in server/
 //    plus the generated build.sh (listed from tools/hub-deploy/, not as a server file). Each entry carries the

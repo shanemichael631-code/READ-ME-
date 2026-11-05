@@ -14,14 +14,14 @@
  {
   "upload": "build.sh",
   "from": "tools/hub-deploy/build.sh",
-  "sha1": "36dca4bf5fd31054328dee673b4088e17c593ac1",
+  "sha1": "80e264e8b80f187ccef49a0d91983c961cbc1035",
   "bytes": 1022
  },
  {
   "upload": "api/chat.js",
   "from": "server/api/chat.js",
-  "sha1": "68d84810e09ab4a831dfd0d45d33f0d6a896a17e",
-  "bytes": 2332
+  "sha1": "dcd0d404d51ae1f4bc89e2873555e1ebf3086b1d",
+  "bytes": 2639
  },
  {
   "upload": "api/health.js",
@@ -38,20 +38,20 @@
  {
   "upload": "lib/auth.js",
   "from": "server/lib/auth.js",
-  "sha1": "774923aea294462eca6694f9a99a5c81d355457c",
-  "bytes": 3088
+  "sha1": "4f4cfc72c4b190659911cbfde12782d98fea7e34",
+  "bytes": 3188
  },
  {
   "upload": "lib/brain.js",
   "from": "server/lib/brain.js",
-  "sha1": "33ef9f8da6e6098b6ba807efc4212d9cf3ace95c",
-  "bytes": 15851
+  "sha1": "d0649cc8d3f039736e81423f319e0e5f4725c4a3",
+  "bytes": 16139
  },
  {
   "upload": "lib/data.js",
   "from": "server/lib/data.js",
-  "sha1": "51a4ef2a821d06677f408f7146b5bf5ea48068f7",
-  "bytes": 3033
+  "sha1": "4dda02b99c00a05bbe6f9e965e946c1919242dcd",
+  "bytes": 4667
  },
  {
   "upload": "lib/needs.js",
