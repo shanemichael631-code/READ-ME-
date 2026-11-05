@@ -2,7 +2,7 @@
 
 Three Vercel serverless functions (Node 22, ESM) behind the hub's "Ask Nova" and "Needs you" sheets:
 
-- `GET /api/health` - configuration check: `{ok, model, hasKey, hasData, dataAsOf, company, engineOk, version}`.
+- `GET /api/health` - configuration check: `{ok, chat, model, hasKey, hasData, dataAsOf, company, engineOk, version}`. `ok` means the data and engine load; `chat` is the same flag as on `/api/needs`.
 - `GET /api/needs` - the inbox: `{asOf, weekOf, items, chat}` computed from `Engine.buildReport` on the latest week. `chat` is true when a key is set (or `MOCK_MODEL=1`); the hub shows Ask Nova only then.
 - `POST /api/chat` - Nova: `{reply, speak, actions, usage}` from the Claude API with tools over the report data.
 

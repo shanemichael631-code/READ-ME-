@@ -48,10 +48,10 @@ jobs:
           echo "http=$code body=$(head -c 200 /tmp/b3)"
           [ "$code" = "401" ] || fail=1
           if [ -n "$HUB_PASSCODE" ]; then
-            echo "--- /api/health with the passcode (expect 200; ok is false until the Anthropic key is set) ---"
+            echo "--- /api/health with the passcode (expect 200 and ok; chat stays false while no Anthropic key is set) ---"
             code=$(curl -sS -o /tmp/b4 -w '%{http_code}' -H "x-hub-pass: $HUB_PASSCODE" "$BASE/api/health")
             echo "http=$code body=$(head -c 400 /tmp/b4)"
-            [ "$code" = "200" ] && grep -q '"engineOk":true' /tmp/b4 && grep -q '"hasData":true' /tmp/b4 || fail=1
+            [ "$code" = "200" ] && grep -q '"ok":true' /tmp/b4 && grep -q '"engineOk":true' /tmp/b4 && grep -q '"hasData":true' /tmp/b4 || fail=1
           else
             echo "(repository secret HUB_PASSCODE not set: skipping the signed-in health check)"
           fi

@@ -341,8 +341,9 @@ svg.ico { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: non
 .bell svg.ico { width: 22px; height: 22px; }
 .bell-n { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--hi); color: var(--on-hi); font-size: 11.5px; font-weight: 700; line-height: 20px; text-align: center; box-shadow: 0 0 0 2px var(--sheet); }
 @media (min-width: 720px) { .tools { order: 0; flex: none; margin-left: auto; } .ask-btn { flex: none; } }
-/* Without Ask Nova the bell alone needs no row of its own: it joins the brand row wherever it fits. */
-@media (min-width: 380px) { .topbar:has(#ask-btn[hidden]) .tools { order: 0; flex: none; } }
+/* Without Ask Nova the lone bell follows the theme control: it joins the brand row where it fits and wraps alone where
+   it does not, so the theme control never leaves the brand row. */
+@media (max-width: 719px) { .topbar:has(#ask-btn[hidden]) .tools { order: 2; flex: none; } }
 
 html.has-sheet, html.has-sheet body { overflow: hidden; }
 .scrim { position: fixed; inset: 0; z-index: 54; background: var(--scrim); }
@@ -1095,7 +1096,7 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
   var chatOn = load(KEYS.askOn) === true;
   function setChat(on) {
     chatOn = on === true; save(KEYS.askOn, chatOn); $('ask-btn').hidden = !chatOn;
-    if (!chatOn && sheet === ask) closeSheet(false);
+    if (!chatOn && sheet === ask) { closeSheet(false); $('bell').focus(); toast('Ask Nova is off on the server', 'info'); }
   }
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1142,6 +1143,7 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
   function showGate(msg) {
     if (!sheet) return;
     sheet.classList.add('is-locked'); sheet.querySelector('.sheet-b').appendChild(gate); gate.hidden = false;
+    $('gate-p').textContent = 'Enter it once on this device to use ' + (chatOn ? 'Ask Nova and Needs you.' : 'Needs you.');
     $('gate-err').textContent = msg || ''; $('gate-err').hidden = !msg;
     $('pass').value = ''; $('pass').focus();
   }
@@ -1155,7 +1157,7 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     pass = v; go.disabled = true;
     api('/api/health').then(function () {
       save(KEYS.pass, v); if (sheet) unlock(sheet); fetchNeeds(true);
-      if (sheet === ask && !busy && turns.length && turns[turns.length - 1].role === 'user') sendTurns(false);
+      if (chatOn && sheet === ask && !busy && turns.length && turns[turns.length - 1].role === 'user') sendTurns(false);
     }, function (err) { pass = null; $('gate-err').textContent = err.message; $('gate-err').hidden = false; }).then(function () { go.disabled = false; });
   });
   scrim.addEventListener('click', function () { closeSheet(); });
@@ -1216,9 +1218,11 @@ html.has-sheet, html.has-sheet body { overflow: hidden; }
     renderNeeds();
   }
   function needHTML(it) {
-    var a = it.action || {}, link = it.linkId && byId(it.linkId), url = it.url || (link ? link.url : ''), btns = '';
-    if (chatOn && a.kind === 'ask' && a.query) btns = '<button type="button" class="btn ghost" data-ask="' + esc(a.query) + '">' + icon('drop') + esc(a.label || 'Ask Nova') + '</button>';
-    else if (url) btns = '<a class="btn ghost" href="' + esc(url) + '" target="_blank" rel="noopener"' + (link ? ' data-open="' + esc(link.id) + '"' : '') + '>' + esc(a.label || 'Open') + icon('external') + '</a>';
+    // With Ask Nova off, an item that only offers a question links to the Owner Report instead, so it is never Done-only.
+    var a = it.action || {}, isAsk = a.kind === 'ask' && !!a.query;
+    var link = (it.linkId && byId(it.linkId)) || (isAsk && !it.url ? byId('report-nova') : null), url = it.url || (link ? link.url : ''), btns = '';
+    if (chatOn && isAsk) btns = '<button type="button" class="btn ghost" data-ask="' + esc(a.query) + '">' + icon('drop') + esc(a.label || 'Ask Nova') + '</button>';
+    else if (url) btns = '<a class="btn ghost" href="' + esc(url) + '" target="_blank" rel="noopener"' + (link ? ' data-open="' + esc(link.id) + '"' : '') + '>' + esc(isAsk ? 'Open report' : a.label || 'Open') + icon('external') + '</a>';
     return '<li class="need">' +
       '<div class="need-t"><b>' + esc(it.title) + '</b>' + (it.amount != null ? '<span class="amt">' + money(it.amount) + '</span>' : '') + '</div>' +
       (it.detail ? '<p class="desc">' + esc(it.detail) + '</p>' : '') +

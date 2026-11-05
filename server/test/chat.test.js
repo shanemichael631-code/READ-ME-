@@ -75,6 +75,6 @@ test('without MOCK_MODEL a placeholder key -> 503 not_configured', async () => {
 
 test('health reports the configuration', async () => {
   const j = await (await s.api('/api/health')).json();
-  assert.deepEqual(j, { ok: true, model: 'mock', hasKey: false, hasData: true, dataAsOf: '2026-10-05', company: 'Demo Plumbing Co.', engineOk: true, version: j.version });
+  assert.deepEqual(j, { ok: true, chat: true, model: 'mock', hasKey: false, hasData: true, dataAsOf: '2026-10-05', company: 'Demo Plumbing Co.', engineOk: true, version: j.version });
   assert.ok(j.version);
 });

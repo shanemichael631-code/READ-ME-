@@ -14,7 +14,7 @@
  {
   "upload": "build.sh",
   "from": "tools/hub-deploy/build.sh",
-  "sha1": "b6114833fcade798e80c7675aa661a9f83043cc7",
+  "sha1": "5cd05117d696c1d61a642bf67f55854062ca7512",
   "bytes": 1022
  },
  {
@@ -26,8 +26,8 @@
  {
   "upload": "api/health.js",
   "from": "server/api/health.js",
-  "sha1": "2dd9a9516289d31930a9e787b76b9aac6792615d",
-  "bytes": 719
+  "sha1": "936409409c9b062c80932639fc66a32a3bc97f0f",
+  "bytes": 721
  },
  {
   "upload": "api/needs.js",
