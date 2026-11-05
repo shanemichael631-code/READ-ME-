@@ -9,7 +9,7 @@ for f in index.html manifest.webmanifest apple-touch-icon.png icon-192.png icon-
 done
 cd public
 sha1sum -c <<'SUMS'
-7222483cd0d35bdd019d85e8523ca88b5b85d298  index.html
+1616eccf9db87e937ab3846069dcd549e3d6fe08  index.html
 62b5d59052a46afadde6ff9d67fad0f26b734217  manifest.webmanifest
 80e05a687c4368950d2af243f30d9e786070ef03  apple-touch-icon.png
 6cbe2af5829c538d6aa9d649ae9a3a85d0916232  icon-192.png

@@ -10,15 +10,15 @@ const ask = (query) => ({ label: 'Ask Nova', kind: 'ask', query });
 const open = { label: 'Open', kind: 'open' };
 const RANK = { high: 0, medium: 1, low: 2 };
 
-export function setupItems(hasKey, dataOk) {
+// A missing Anthropic key is not an item: chat is optional, so the hub hides Ask Nova instead (see chat in api/needs.js).
+export function setupItems(dataOk) {
   const items = [];
-  if (!hasKey) items.push({ id: 'setup:key', kind: 'setup', severity: 'high', title: 'Add the Anthropic key in Vercel', detail: 'Ask Nova needs ANTHROPIC_API_KEY on the nova-hub-gvz6r project. Add it, then redeploy.', url: ENV_URL, action: open });
   if (!dataOk) items.push({ id: 'setup:data', kind: 'setup', severity: 'high', title: 'Report data is unreachable', detail: 'Nova could not fetch or read the report data. Check REPORT_DATA_URL and REPORT_BYPASS_SECRET in Vercel.', url: ENV_URL, action: open });
   return items;
 }
 
-export function buildNeeds({ report: m, company: c, Engine, asOf }, today, hasKey) {
-  const items = setupItems(hasKey, true);
+export function buildNeeds({ report: m, company: c, Engine, asOf }, today) {
+  const items = setupItems(true);
   const week = m.cur.start;
   const leak = (kind) => m.leaks.items.find((x) => x.kind === kind);
   if (isMonday(today) && asOf === today) items.push({ id: 'report:new:' + asOf, kind: 'report', severity: 'medium', title: 'New Owner Report is out', detail: 'The week of ' + fmt(week) + ' in numbers: leaks, techs and 3 things to do.', url: REPORT_URL, linkId: 'report-nova', since: asOf, action: open });

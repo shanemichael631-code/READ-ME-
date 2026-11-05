@@ -3,7 +3,7 @@
 Three Vercel serverless functions (Node 22, ESM) behind the hub's "Ask Nova" and "Needs you" sheets:
 
 - `GET /api/health` - configuration check: `{ok, model, hasKey, hasData, dataAsOf, company, engineOk, version}`.
-- `GET /api/needs` - the inbox: `{asOf, weekOf, items}` computed from `Engine.buildReport` on the latest week.
+- `GET /api/needs` - the inbox: `{asOf, weekOf, items, chat}` computed from `Engine.buildReport` on the latest week. `chat` is true when a key is set (or `MOCK_MODEL=1`); the hub shows Ask Nova only then.
 - `POST /api/chat` - Nova: `{reply, speak, actions, usage}` from the Claude API with tools over the report data.
 
 Every request needs the `x-hub-pass` header. Errors are `{error: {code, message}}`: 401 `bad_passcode`,
@@ -14,7 +14,7 @@ Every request needs the `x-hub-pass` header. Errors are `{error: {code, message}
 | Name | Purpose |
 |---|---|
 | `HUB_PASSCODE` | The team passcode. Change it here; everyone types the new one on next use. |
-| `ANTHROPIC_API_KEY` | Claude API key. Missing or `REPLACE_ME` means `setup:key` in Needs you and 503 on chat. |
+| `ANTHROPIC_API_KEY` | Optional Claude API key (paid per use). Missing or `REPLACE_ME` turns chat off: `/api/needs` reports `chat: false`, the hub hides Ask Nova, and `/api/chat` answers 503. It is never a Needs-you item. |
 | `ANTHROPIC_MODEL` | Model id, default `claude-opus-5-5`. |
 | `ANTHROPIC_EFFORT` | `low` (default), `medium` or `high`; anything else falls back to `low`. |
 | `REPORT_DATA_URL` | The private live `data.js` (served by `nova-owner-report`); a disk path or `file:` URL also works. |

@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (!(await guard(req, res, { method: 'POST', chat: true }))) return;
   let input;
   try { input = clean(await readBody(req)); } catch (e) { return fail(res, 400, 'bad_request', e.message); }
-  if (process.env.MOCK_MODEL !== '1' && !hasKey()) return fail(res, 503, 'not_configured', 'Nova is not set up yet: the Anthropic key is missing. See "Needs you".');
+  if (process.env.MOCK_MODEL !== '1' && !hasKey()) return fail(res, 503, 'not_configured', 'Ask Nova is off: no Anthropic key is set on the server.');
   let ctx;
   try {
     ctx = await loadReport();

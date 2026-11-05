@@ -14,14 +14,14 @@
  {
   "upload": "build.sh",
   "from": "tools/hub-deploy/build.sh",
-  "sha1": "80e264e8b80f187ccef49a0d91983c961cbc1035",
+  "sha1": "b6114833fcade798e80c7675aa661a9f83043cc7",
   "bytes": 1022
  },
  {
   "upload": "api/chat.js",
   "from": "server/api/chat.js",
-  "sha1": "dcd0d404d51ae1f4bc89e2873555e1ebf3086b1d",
-  "bytes": 2639
+  "sha1": "9983aa0221472d6bc377a46900dea779a3edad2f",
+  "bytes": 2624
  },
  {
   "upload": "api/health.js",
@@ -32,8 +32,8 @@
  {
   "upload": "api/needs.js",
   "from": "server/api/needs.js",
-  "sha1": "e3f28cc99a25f888a47f4a9ca4020beba2750c88",
-  "bytes": 881
+  "sha1": "932b2682475b7ea03740f06fec8387e8de5bc1dc",
+  "bytes": 1044
  },
  {
   "upload": "lib/auth.js",
@@ -56,7 +56,7 @@
  {
   "upload": "lib/needs.js",
   "from": "server/lib/needs.js",
-  "sha1": "3db87c909bb641fa2a0acf6b7f4eea7572ffaf3c",
-  "bytes": 4867
+  "sha1": "436a7e6277c44992bae2b01ba69c1d810a298aa2",
+  "bytes": 4717
  }
 ]
