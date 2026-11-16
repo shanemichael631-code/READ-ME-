@@ -86,13 +86,27 @@ const techRows = fs.readdirSync(RAW).filter((f) => f.startsWith("techjobs-") && 
 const quotesAll = fs.existsSync(path.join(RAW, "quotes.jsonl")) ? readJsonl(path.join(RAW, "quotes.jsonl")) : [];
 
 // ---------- names (privacy: first name + last initial) ----------
+// "Gary Brumbaugh RF" -> "Gary B.", "Allen & Donna Aitken 5W" -> "Allen & Donna A.",
+// "Barb Snell / Marvin Bell" -> "Barb S. / Marvin B.". Office tags in the client name (3W, 5W, RF, JR,
+// Mr., single letters, "(UNINSTALLED)") are skipped so a surname never shows in full, and middle names
+// are dropped: each person is a first name plus their last name's initial.
+const NAME_TAG = (t) => !/[A-Za-z]/.test(t) || /\d/.test(t) || /^[A-Za-z]\.?$/.test(t) || /^(RF|WRF|JR|SR|II|III|IV|MR|MRS|MS|DR)\.?$/i.test(t);
+const JOINER = (t) => /^[&\/+]$/.test(t);
 function shortName(full) {
-  const n = String(full || "").replace(/\s+/g, " ").trim();
+  const n = String(full || "").replace(/\([^)]*\)/g, " ").replace(/\s*([&\/+])\s*/g, " $1 ").replace(/\s+/g, " ").trim();
   if (!n) return "Unknown";
-  const parts = n.split(" ");
-  if (parts.length === 1) return parts[0];
-  const last = parts.pop();
-  return parts.join(" ") + " " + last.replace(/[^A-Za-z]/g, "").charAt(0).toUpperCase() + ".";
+  const parts = n.split(" ").map((t) => (/^and$/i.test(t) ? "&" : t)).filter((t) => JOINER(t) || !NAME_TAG(t));
+  if (!parts.some((t) => !JOINER(t))) return n.split(" ")[0];
+  const normalCase = parts.some((t) => /[a-z]/.test(t));
+  while (normalCase && parts.length > 2 && /^[A-Z]{2,4}$/.test(parts[parts.length - 1])) parts.pop(); // "Smith CPM"
+  const people = [[]];
+  parts.forEach((t) => { if (!JOINER(t)) people[people.length - 1].push(t); else if (people[people.length - 1].length) people.push([t]); });
+  return people.filter((p) => p.some((t) => !JOINER(t))).map((p) => {
+    const words = p.filter((t) => !JOINER(t)), join = JOINER(p[0]) ? p[0] + " " : "";
+    if (words.length === 1) return join + words[0];
+    const initial = words[words.length - 1].replace(/[^A-Za-z]/g, "").charAt(0).toUpperCase();
+    return join + words[0] + " " + initial + ".";
+  }).join(" ");
 }
 
 // ---------- test / internal jobs ----------
